@@ -79,7 +79,7 @@ passport.use(
           return done(null, false, { message: 'Invalid credentials' });
         }
 
-        const isValid = await bcrypt.compare(password, admin.passwordHash);
+        const isValid = await bcrypt.compare(password, admin.password);
         if (!isValid) {
           return done(null, false, { message: 'Invalid credentials' });
         }
@@ -117,7 +117,7 @@ passport.use(
           return done(null, false, { message: 'Invalid credentials' });
         }
 
-        const isValid = await bcrypt.compare(password, delivery.passwordHash);
+        const isValid = await bcrypt.compare(password, delivery.password);
         if (!isValid) {
           return done(null, false, { message: 'Invalid credentials' });
         }

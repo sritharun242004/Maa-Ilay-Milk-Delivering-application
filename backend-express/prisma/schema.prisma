@@ -136,19 +136,19 @@ model DeliveryPerson {
   password          String           // Hashed password
   name              String
   isActive          Boolean          @default(true)
-  
+
   // Zone/Route assignment
   zone              String?          // e.g., "Pondicherry Central", "Auroville"
-  
+
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
   lastLoginAt       DateTime?
   createdByAdminId  String
-  
+
   // Relations
   customers         Customer[]
   deliveries        Delivery[]
-  
+
   @@index([phone])
   @@index([zone])
 }

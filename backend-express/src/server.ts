@@ -6,6 +6,7 @@ import passport from './config/passport';
 import authRoutes from './routes/auth';
 import customerRoutes from './routes/customer';
 import deliveryRoutes from './routes/delivery';
+import adminRoutes from './routes/admin';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -64,6 +65,9 @@ app.use('/api/customer', customerRoutes);
 
 // Delivery person routes
 app.use('/api/delivery', deliveryRoutes);
+
+// Admin routes
+app.use('/api/admin', adminRoutes);
 
 // ============================================================================
 // ERROR HANDLING

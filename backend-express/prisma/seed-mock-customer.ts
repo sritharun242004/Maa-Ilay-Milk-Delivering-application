@@ -179,6 +179,26 @@ async function main() {
         issuedDate: dateOnly(2025, 3, 1),
         performedByDeliveryPersonId: deliveryPerson.id,
       },
+      {
+        customerId: customer.id,
+        action: 'RETURNED',
+        size: 'LARGE',
+        quantity: 1,
+        largeBottleBalanceAfter: 2,
+        smallBottleBalanceAfter: 0,
+        description: 'Bottle collected',
+        performedByDeliveryPersonId: deliveryPerson.id,
+      },
+      {
+        customerId: customer.id,
+        action: 'RETURNED',
+        size: 'LARGE',
+        quantity: 1,
+        largeBottleBalanceAfter: 1,
+        smallBottleBalanceAfter: 0,
+        description: 'Bottle collected',
+        performedByDeliveryPersonId: deliveryPerson.id,
+      },
     ],
   });
 
