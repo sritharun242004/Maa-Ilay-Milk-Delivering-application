@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/customer/layout,_N_T_/customer/wallet/layout,_N_T_/customer/wallet/page,_N_T_/customer/wallet"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/customer/wallet/__PAGE__",
+    "/customer/wallet",
+    "/customer",
+    "/_index",
+    "/_head"
+  ]
+}

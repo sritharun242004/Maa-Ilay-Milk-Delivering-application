@@ -1,0 +1,360 @@
+{
+  "version": 3,
+  "pages404": true,
+  "appType": "app",
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "priority": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    },
+    {
+      "source": "/dashboard",
+      "destination": "/customer",
+      "statusCode": 307,
+      "regex": "^(?!/_next)/dashboard(?:/)?$"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "origin-when-cross-origin"
+        }
+      ],
+      "regex": "^(?:/(.*))(?:/)?$"
+    }
+  ],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/admin/customers/[id]",
+      "regex": "^/admin/customers/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/admin/customers/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/admin/customers/[id]",
+      "regex": "^/api/admin/customers/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/customers/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/admin/customers/[id]/approve",
+      "regex": "^/api/admin/customers/([^/]+?)/approve(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/customers/(?<nxtPid>[^/]+?)/approve(?:/)?$"
+    },
+    {
+      "page": "/api/admin/customers/[id]/wallet",
+      "regex": "^/api/admin/customers/([^/]+?)/wallet(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/customers/(?<nxtPid>[^/]+?)/wallet(?:/)?$"
+    },
+    {
+      "page": "/api/admin/delivery-persons/[id]",
+      "regex": "^/api/admin/delivery\\-persons/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/delivery\\-persons/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/auth/[...nextauth]",
+      "regex": "^/api/auth/(.+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPnextauth": "nxtPnextauth"
+      },
+      "namedRegex": "^/api/auth/(?<nxtPnextauth>.+?)(?:/)?$"
+    },
+    {
+      "page": "/api/delivery/[id]/mark",
+      "regex": "^/api/delivery/([^/]+?)/mark(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/delivery/(?<nxtPid>[^/]+?)/mark(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_global-error",
+      "regex": "^/_global\\-error(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_global\\-error(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/admin",
+      "regex": "^/admin(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin(?:/)?$"
+    },
+    {
+      "page": "/admin/customers",
+      "regex": "^/admin/customers(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/customers(?:/)?$"
+    },
+    {
+      "page": "/admin/delivery-persons",
+      "regex": "^/admin/delivery\\-persons(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/delivery\\-persons(?:/)?$"
+    },
+    {
+      "page": "/admin/holidays",
+      "regex": "^/admin/holidays(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/holidays(?:/)?$"
+    },
+    {
+      "page": "/admin/inventory",
+      "regex": "^/admin/inventory(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/inventory(?:/)?$"
+    },
+    {
+      "page": "/api/admin/customers",
+      "regex": "^/api/admin/customers(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/customers(?:/)?$"
+    },
+    {
+      "page": "/api/admin/dashboard",
+      "regex": "^/api/admin/dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/dashboard(?:/)?$"
+    },
+    {
+      "page": "/api/admin/delivery-persons",
+      "regex": "^/api/admin/delivery\\-persons(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/delivery\\-persons(?:/)?$"
+    },
+    {
+      "page": "/api/admin/holidays",
+      "regex": "^/api/admin/holidays(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/holidays(?:/)?$"
+    },
+    {
+      "page": "/api/admin/inventory",
+      "regex": "^/api/admin/inventory(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/inventory(?:/)?$"
+    },
+    {
+      "page": "/api/cron/check-penalties",
+      "regex": "^/api/cron/check\\-penalties(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/cron/check\\-penalties(?:/)?$"
+    },
+    {
+      "page": "/api/cron/monthly-cycle",
+      "regex": "^/api/cron/monthly\\-cycle(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/cron/monthly\\-cycle(?:/)?$"
+    },
+    {
+      "page": "/api/cron/process-billing",
+      "regex": "^/api/cron/process\\-billing(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/cron/process\\-billing(?:/)?$"
+    },
+    {
+      "page": "/api/customer/pause",
+      "regex": "^/api/customer/pause(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/customer/pause(?:/)?$"
+    },
+    {
+      "page": "/api/customer/profile",
+      "regex": "^/api/customer/profile(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/customer/profile(?:/)?$"
+    },
+    {
+      "page": "/api/customer/register",
+      "regex": "^/api/customer/register(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/customer/register(?:/)?$"
+    },
+    {
+      "page": "/api/customer/subscription",
+      "regex": "^/api/customer/subscription(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/customer/subscription(?:/)?$"
+    },
+    {
+      "page": "/api/delivery/export",
+      "regex": "^/api/delivery/export(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/delivery/export(?:/)?$"
+    },
+    {
+      "page": "/api/delivery/summary",
+      "regex": "^/api/delivery/summary(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/delivery/summary(?:/)?$"
+    },
+    {
+      "page": "/api/delivery/today",
+      "regex": "^/api/delivery/today(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/delivery/today(?:/)?$"
+    },
+    {
+      "page": "/api/payment/create-order",
+      "regex": "^/api/payment/create\\-order(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/payment/create\\-order(?:/)?$"
+    },
+    {
+      "page": "/api/payment/verify",
+      "regex": "^/api/payment/verify(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/payment/verify(?:/)?$"
+    },
+    {
+      "page": "/api/webhooks/razorpay",
+      "regex": "^/api/webhooks/razorpay(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/webhooks/razorpay(?:/)?$"
+    },
+    {
+      "page": "/customer",
+      "regex": "^/customer(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/customer(?:/)?$"
+    },
+    {
+      "page": "/customer/history",
+      "regex": "^/customer/history(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/customer/history(?:/)?$"
+    },
+    {
+      "page": "/customer/pause",
+      "regex": "^/customer/pause(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/customer/pause(?:/)?$"
+    },
+    {
+      "page": "/customer/profile",
+      "regex": "^/customer/profile(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/customer/profile(?:/)?$"
+    },
+    {
+      "page": "/customer/register",
+      "regex": "^/customer/register(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/customer/register(?:/)?$"
+    },
+    {
+      "page": "/customer/subscribe",
+      "regex": "^/customer/subscribe(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/customer/subscribe(?:/)?$"
+    },
+    {
+      "page": "/customer/wallet",
+      "regex": "^/customer/wallet(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/customer/wallet(?:/)?$"
+    },
+    {
+      "page": "/delivery",
+      "regex": "^/delivery(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/delivery(?:/)?$"
+    },
+    {
+      "page": "/favicon.ico",
+      "regex": "^/favicon\\.ico(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/favicon\\.ico(?:/)?$"
+    },
+    {
+      "page": "/login",
+      "regex": "^/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login(?:/)?$"
+    },
+    {
+      "page": "/login/admin",
+      "regex": "^/login/admin(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login/admin(?:/)?$"
+    },
+    {
+      "page": "/login/customer",
+      "regex": "^/login/customer(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login/customer(?:/)?$"
+    },
+    {
+      "page": "/login/delivery",
+      "regex": "^/login/delivery(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login/delivery(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments",
+    "clientParamParsing": false,
+    "dynamicRSCPrerender": false
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}

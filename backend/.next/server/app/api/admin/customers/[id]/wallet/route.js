@@ -1,0 +1,10 @@
+var R=require("../../../../../../chunks/[turbopack]_runtime.js")("server/app/api/admin/customers/[id]/wallet/route.js")
+R.c("server/chunks/[root-of-the-server]__956d7ce4._.js")
+R.c("server/chunks/[root-of-the-server]__24f8fcd9._.js")
+R.c("server/chunks/node_modules_next_f2da0d3e._.js")
+R.c("server/chunks/[root-of-the-server]__4c2b57b9._.js")
+R.c("server/chunks/[root-of-the-server]__8b7d291b._.js")
+R.c("server/chunks/src_lib_validations_ts_9a13e6d3._.js")
+R.c("server/chunks/_next-internal_server_app_api_admin_customers_[id]_wallet_route_actions_a648310a.js")
+R.m(94542)
+module.exports=R.m(94542).exports

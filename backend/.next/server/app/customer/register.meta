@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/customer/layout,_N_T_/customer/register/layout,_N_T_/customer/register/page,_N_T_/customer/register"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/customer/register/__PAGE__",
+    "/customer/register",
+    "/customer",
+    "/_index",
+    "/_head"
+  ]
+}

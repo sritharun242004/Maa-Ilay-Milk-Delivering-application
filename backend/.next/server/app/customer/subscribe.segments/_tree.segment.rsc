@@ -1,0 +1,3 @@
+:HL["/_next/static/chunks/ded00e474a1649ac.css","style"]
+:HL["https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg","image"]
+0:{"buildId":"mRwPW1y6HTH5HcaKDtMrg","tree":{"name":"","paramType":null,"paramKey":"","hasRuntimePrefetch":false,"slots":{"children":{"name":"customer","paramType":null,"paramKey":"customer","hasRuntimePrefetch":false,"slots":{"children":{"name":"subscribe","paramType":null,"paramKey":"subscribe","hasRuntimePrefetch":false,"slots":{"children":{"name":"__PAGE__","paramType":null,"paramKey":"__PAGE__","hasRuntimePrefetch":false,"slots":null,"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":true},"staleTime":300}

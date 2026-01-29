@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/process-billing",
+      "schedule": "31 11 * * *"
+    },
+    {
+      "path": "/api/cron/check-penalties",
+      "schedule": "30 18 * * *"
+    },
+    {
+      "path": "/api/cron/monthly-cycle",
+      "schedule": "31 18 1 * *"
+    }
+  ]
+}
