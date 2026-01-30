@@ -94,12 +94,12 @@ router.post('/complete-profile', isAuthenticated, isCustomer, async (req, res) =
     });
   } catch (error: any) {
     console.error('Profile completion error:', error);
-    
+
     // Handle unique constraint violation (phone already exists)
     if (error.code === 'P2002') {
       return res.status(400).json({ error: 'Phone number already registered' });
     }
-    
+
     res.status(500).json({ error: 'Failed to complete profile' });
   }
 });
@@ -184,19 +184,21 @@ router.get('/dashboard', isAuthenticated, isCustomer, async (req, res) => {
       },
       subscription: sub
         ? {
-            id: sub.id,
-            status: sub.status,
-            subscriptionStatusDisplay: subscriptionStatusDisplayValue,
-            dailyQuantityMl: sub.dailyQuantityMl,
-            dailyPricePaise: sub.dailyPricePaise,
-            dailyPriceRs: (sub.dailyPricePaise / 100).toFixed(2),
-            largeBotles: sub.largeBotles,
-            smallBottles: sub.smallBottles,
-            currentCycleStart: sub.currentCycleStart,
-            paymentCycleCount: sub.paymentCycleCount,
-            pauseDaysUsedThisMonth: sub.pauseDaysUsedThisMonth,
-            pauseMonthYear: sub.pauseMonthYear,
-          }
+          id: sub.id,
+          status: sub.status,
+          subscriptionStatusDisplay: subscriptionStatusDisplayValue,
+          dailyQuantityMl: sub.dailyQuantityMl,
+          dailyPricePaise: sub.dailyPricePaise,
+          dailyPriceRs: (sub.dailyPricePaise / 100).toFixed(2),
+          startDate: sub.startDate,
+          endDate: sub.endDate,
+          largeBotles: sub.largeBotles,
+          smallBottles: sub.smallBottles,
+          currentCycleStart: sub.currentCycleStart,
+          paymentCycleCount: sub.paymentCycleCount,
+          pauseDaysUsedThisMonth: sub.pauseDaysUsedThisMonth,
+          pauseMonthYear: sub.pauseMonthYear,
+        }
         : null,
       nextPayment: {
         date: nextPaymentDateObj.toISOString().slice(0, 10),
@@ -262,6 +264,116 @@ router.get('/wallet', isAuthenticated, isCustomer, async (req, res) => {
     res.status(500).json({ error: 'Failed to load wallet' });
   }
 });
+
+// Start Subscription - calculates amount, tops up wallet (mock), and creates/updates subscription
+router.post('/subscribe', isAuthenticated, isCustomer, async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    const { dailyQuantityMl, startDate, endDate, amountToPayRs } = req.body;
+
+    if (!dailyQuantityMl || !startDate || !endDate) {
+      return res.status(400).json({ error: 'Missing subscription details' });
+    }
+
+    // 1. Calculate daily rate (matching frontend logic)
+    let dailyRs = 0;
+    if (dailyQuantityMl === 500) dailyRs = PRICING.DAILY_500ML_RS;
+    else if (dailyQuantityMl === 1000) dailyRs = PRICING.DAILY_1L_RS;
+    else if (dailyQuantityMl === 1500) dailyRs = PRICING.DAILY_1L_RS + PRICING.DAILY_500ML_RS;
+    else dailyRs = (dailyQuantityMl / 1000) * PRICING.DAILY_1L_RS;
+
+    const dailyPricePaise = Math.round(dailyRs * 100);
+
+    // 2. Calculate days
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const days = Math.max(0, Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1);
+
+    // Use the amount passed from frontend (which is total - wallet)
+    const amountPaise = typeof amountToPayRs === 'number'
+      ? Math.round(amountToPayRs * 100)
+      : 0;
+
+    // 3. Update/Create Wallet and WalletTransaction
+    const customerId = req.user.id;
+
+    // Find or create wallet
+    let wallet = await prisma.wallet.findUnique({ where: { customerId } });
+    if (!wallet) {
+      wallet = await prisma.wallet.create({
+        data: { customerId, balancePaise: 0 }
+      });
+    }
+
+    const newBalancePaise = wallet.balancePaise + amountPaise;
+
+    await prisma.$transaction([
+      // Update wallet balance
+      prisma.wallet.update({
+        where: { id: wallet.id },
+        data: { balancePaise: newBalancePaise }
+      }),
+      // Add transaction record
+      prisma.walletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          type: 'WALLET_TOPUP',
+          amountPaise: amountPaise,
+          balanceAfterPaise: newBalancePaise,
+          description: `Subscription payment for ${days} days (${dailyQuantityMl}ml/day)`,
+          referenceType: 'payment',
+          referenceId: `MOCK_${Date.now()}`
+        }
+      }),
+      // Create/Update subscription
+      prisma.subscription.upsert({
+        where: { customerId },
+        update: {
+          dailyQuantityMl,
+          dailyPricePaise,
+          largeBotles: Math.floor(dailyQuantityMl / 1000),
+          smallBottles: (dailyQuantityMl % 1000) >= 500 ? 1 : 0,
+          status: 'ACTIVE',
+          startDate: start,
+          endDate: end,
+          currentCycleStart: start
+        },
+        create: {
+          customerId,
+          dailyQuantityMl,
+          dailyPricePaise,
+          largeBotles: Math.floor(dailyQuantityMl / 1000),
+          smallBottles: (dailyQuantityMl % 1000) >= 500 ? 1 : 0,
+          status: 'ACTIVE',
+          startDate: start,
+          endDate: end,
+          currentCycleStart: start,
+          paymentCycleCount: 1
+        }
+      }),
+      // Update customer status to ACTIVE if it was PENDING_APPROVAL or PENDING_PAYMENT
+      prisma.customer.update({
+        where: { id: customerId },
+        data: { status: 'ACTIVE' }
+      })
+    ]);
+
+    res.json({
+      success: true,
+      message: 'Subscription started successfully!',
+      transaction: {
+        amountRs: amountToPayRs,
+        days,
+        newBalanceRs: (newBalancePaise / 100).toFixed(2)
+      }
+    });
+
+  } catch (e) {
+    console.error('Subscription error:', e);
+    res.status(500).json({ error: 'Failed to process subscription' });
+  }
+});
+
 
 // Get calendar data: pause days + paused dates + delivery status per date (from DB only)
 // Same concept as History: DELIVERED / PAUSED / NOT_DELIVERED per date

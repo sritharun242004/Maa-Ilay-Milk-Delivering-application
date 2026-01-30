@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import express from 'express';
 import session from 'express-session';
+import { PrismaSessionStore } from '@quixo3/prisma-session-store';
+import prisma from './config/prisma';
 import cors from 'cors';
 import passport from './config/passport';
 import authRoutes from './routes/auth';
@@ -30,12 +32,20 @@ app.use(
   session({
     secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
     resave: false,
-    saveUninitialized: false,
+    saveUninitialized: true, // Recommended for better tracking in dev
+    store: new PrismaSessionStore(
+      prisma as any,
+      {
+        checkPeriod: 2 * 60 * 1000,  // ms
+        dbRecordIdIsSessionId: true,
+        dbRecordIdFunction: undefined,
+      }
+    ),
     cookie: {
       secure: process.env.NODE_ENV === 'production', // HTTPS in production
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Use 'lax' for local dev
     },
   })
 );
@@ -50,8 +60,8 @@ app.use(passport.session());
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     message: 'Maa Ilay Express Backend is running',
     environment: process.env.NODE_ENV || 'development',
   });

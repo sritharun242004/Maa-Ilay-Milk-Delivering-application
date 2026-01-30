@@ -173,6 +173,7 @@ model Subscription {
   // Subscription cycle tracking
   status            SubscriptionStatus @default(PENDING)
   startDate         DateTime?
+  endDate           DateTime?
   currentCycleStart DateTime?          // Start of current billing cycle
   paymentCycleCount Int                @default(0)  // 1, 2, 3, 4... (deposit on 1, 4, 7...)
   
@@ -440,4 +441,11 @@ model SystemConfig {
   description       String?
   updatedAt         DateTime            @updatedAt
   updatedByAdminId  String?
+}
+
+model session {
+  id        String   @id @default(cuid())
+  sid       String   @unique
+  data      String
+  expiresAt DateTime
 }
