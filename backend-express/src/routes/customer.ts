@@ -6,6 +6,8 @@ import { PRICING } from '../config/pricing';
 const router = Router();
 
 const PAYMENT_DAY = PRICING.PAYMENT_DAY;
+/** To pause TOMORROW, customer must pause by TODAY 5:00 PM (My Life rule). */
+const PAUSE_CUTOFF_HOUR = 17;
 
 /** Subscription status for dashboard: only Active or Inactive. Active when balance >= 1 day's milk charge (tomorrow's delivery); Inactive when below. */
 function subscriptionStatusDisplay(balanceRs: number, dailyRs: number): 'ACTIVE' | 'INACTIVE' {
@@ -34,6 +36,7 @@ function getNextPaymentDate(now: Date): { date: Date; year: number; month: numbe
 function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
+
 
 // Complete customer profile (onboarding) — saves all form data to DB
 router.post('/complete-profile', isAuthenticated, isCustomer, async (req, res) => {
@@ -316,6 +319,8 @@ router.get('/calendar', isAuthenticated, isCustomer, async (req, res) => {
       year,
       month,
       currentMonth: `${year}-${String(month + 1).padStart(2, '0')}`,
+      pauseCutoffHour: PAUSE_CUTOFF_HOUR,
+      pauseCutoffMessage: 'To pause tomorrow, you must pause by 5:00 PM today. After 5 PM, you can only pause from the day after tomorrow onward.',
     });
   } catch (e) {
     console.error('Calendar error:', e);
@@ -333,9 +338,22 @@ router.post('/calendar/pause', isAuthenticated, isCustomer, async (req, res) => 
     }
     const [y, m, d] = dateStr.split('-').map(Number);
     const pauseDate = new Date(y, m - 1, d, 0, 0, 0, 0);
-    const todayStart = new Date(new Date().setHours(0, 0, 0, 0));
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     if (pauseDate < todayStart) {
       return res.status(400).json({ error: 'Cannot pause a past date' });
+    }
+    // To pause TOMORROW, request must be before TODAY 5 PM
+    const tomorrowStart = new Date(todayStart);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+    if (pauseDate.getTime() === tomorrowStart.getTime()) {
+      const cutoff = new Date(todayStart.getFullYear(), todayStart.getMonth(), todayStart.getDate(), PAUSE_CUTOFF_HOUR, 0, 0, 0);
+      if (now >= cutoff) {
+        return res.status(400).json({
+          error: 'To pause tomorrow, you must pause by 5:00 PM today. You can only pause from the day after tomorrow onward.',
+          cutoff: '17:00',
+        });
+      }
     }
     const customerId = req.user.id;
     const customer = await prisma.customer.findUnique({

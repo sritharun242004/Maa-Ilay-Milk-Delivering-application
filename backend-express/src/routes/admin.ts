@@ -2,6 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { isAuthenticated, isAdmin } from '../middleware/auth';
 import prisma from '../config/prisma';
+import { ensureTodayDeliveries } from './delivery';
 
 const router = Router();
 
@@ -31,6 +32,10 @@ router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
     const todayEnd = new Date(new Date().setHours(23, 59, 59, 999));
     const sevenDaysAgo = new Date(todayStart);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+
+    // Ensure today's Delivery rows exist for all delivery persons (from active subscriptions, exclude paused/unpaid)
+    const allDeliveryPersons = await prisma.deliveryPerson.findMany({ select: { id: true } });
+    await Promise.all(allDeliveryPersons.map((dp) => ensureTodayDeliveries(dp.id, todayStart)));
 
     const [
       todayDeliveries,
@@ -123,7 +128,10 @@ router.get('/customers', isAuthenticated, isAdmin, async (req, res) => {
         ...(statusFilter && statusFilter !== 'all' ? { status: statusFilter as any } : {}),
         ...(zoneFilter && zoneFilter !== 'all' ? { deliveryPerson: { zone: zoneFilter } } : {}),
       },
-      include: { subscription: true, deliveryPerson: true },
+      include: {
+        subscription: { select: { dailyQuantityMl: true } },
+        deliveryPerson: { select: { id: true, name: true, zone: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -140,21 +148,170 @@ router.get('/customers', isAuthenticated, isAdmin, async (req, res) => {
         : '—',
       status: c.status,
       zone: c.deliveryPerson?.zone ?? '—',
+      deliveryPersonId: c.deliveryPersonId ?? null,
+      deliveryPersonName: c.deliveryPerson?.name ?? '—',
     }));
 
-    if (list.length === 0) {
-      return res.json({
-        customers: [
-          { id: 's1', name: 'Priya Sharma', email: 'priya@example.com', phone: '9876543201', address: '12 Main St, Pondicherry 605001', plan: '1L', status: 'ACTIVE', zone: 'Pondicherry Central' },
-          { id: 's2', name: 'Amit Kumar', email: 'amit@example.com', phone: '9876543202', address: '5 Beach Rd, Pondicherry 605002', plan: '500ml', status: 'ACTIVE', zone: 'Auroville' },
-          { id: 's3', name: 'Lakshmi Devi', email: 'lakshmi@example.com', phone: '9876543203', address: '8 White Town, Pondicherry 605003', plan: '1L', status: 'PENDING_APPROVAL', zone: '—' },
-        ],
-      });
-    }
     res.json({ customers: list });
   } catch (e) {
     console.error('Admin customers error:', e);
     res.status(500).json({ error: 'Failed to load customers' });
+  }
+});
+
+// Get single customer full detail (admin): personal info, wallet, last transaction, subscription, bottle balance, calendar
+router.get('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const customer = await prisma.customer.findUnique({
+      where: { id },
+      include: {
+        deliveryPerson: true,
+        subscription: true,
+        wallet: {
+          include: {
+            transactions: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
+        bottleLedger: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        pauses: {
+          where: {
+            pauseDate: {
+              gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+              lte: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
+            },
+          },
+        },
+      },
+    });
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const firstDay = new Date(year, month, 1, 0, 0, 0, 0);
+    const lastDay = new Date(year, month + 1, 0, 23, 59, 59, 999);
+    const deliveries = await prisma.delivery.findMany({
+      where: {
+        customerId: id,
+        deliveryDate: { gte: firstDay, lte: lastDay },
+      },
+      select: { deliveryDate: true, status: true },
+    });
+    const deliveryStatusByDate: Record<string, 'DELIVERED' | 'PAUSED' | 'NOT_DELIVERED'> = {};
+    for (const d of deliveries) {
+      const dateStr = d.deliveryDate.toISOString().slice(0, 10);
+      const status = d.status;
+      if (status === 'DELIVERED' || status === 'NOT_DELIVERED') {
+        deliveryStatusByDate[dateStr] = status;
+      } else {
+        deliveryStatusByDate[dateStr] = status === 'PAUSED' || status === 'BLOCKED' || status === 'HOLIDAY' ? 'PAUSED' : 'NOT_DELIVERED';
+      }
+    }
+
+    const lastLedger = customer.bottleLedger[0];
+    res.json({
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        addressLine1: customer.addressLine1,
+        addressLine2: customer.addressLine2,
+        landmark: customer.landmark,
+        city: customer.city,
+        pincode: customer.pincode,
+        status: customer.status,
+        deliveryNotes: customer.deliveryNotes,
+        deliveryPerson: customer.deliveryPerson
+          ? { id: customer.deliveryPerson.id, name: customer.deliveryPerson.name, zone: customer.deliveryPerson.zone }
+          : null,
+      },
+      wallet: customer.wallet
+        ? {
+            balancePaise: customer.wallet.balancePaise,
+            balanceRs: (customer.wallet.balancePaise / 100).toFixed(2),
+          }
+        : null,
+      lastTransaction: customer.wallet?.transactions?.[0]
+        ? {
+            id: customer.wallet.transactions[0].id,
+            type: customer.wallet.transactions[0].type,
+            amountPaise: customer.wallet.transactions[0].amountPaise,
+            amountRs: (customer.wallet.transactions[0].amountPaise / 100).toFixed(2),
+            description: customer.wallet.transactions[0].description,
+            createdAt: customer.wallet.transactions[0].createdAt,
+          }
+        : null,
+      subscription: customer.subscription
+        ? {
+            dailyQuantityMl: customer.subscription.dailyQuantityMl,
+            dailyPricePaise: customer.subscription.dailyPricePaise,
+            status: customer.subscription.status,
+            largeBottles: customer.subscription.largeBotles,
+            smallBottles: customer.subscription.smallBottles,
+          }
+        : null,
+      bottleBalance: lastLedger
+        ? { large: lastLedger.largeBottleBalanceAfter, small: lastLedger.smallBottleBalanceAfter }
+        : { large: 0, small: 0 },
+      calendar: {
+        year,
+        month,
+        pausedDates: customer.pauses.map((p) => p.pauseDate.toISOString().slice(0, 10)),
+        deliveryStatusByDate,
+      },
+    });
+  } catch (e) {
+    console.error('Admin customer detail error:', e);
+    res.status(500).json({ error: 'Failed to load customer' });
+  }
+});
+
+// Update customer (admin): e.g. reassign delivery person
+router.patch('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const deliveryPersonId = req.body?.deliveryPersonId as string | null | undefined;
+
+    const existing = await prisma.customer.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: 'Customer not found' });
+
+    const data: { deliveryPersonId?: string | null } = {};
+    if (deliveryPersonId !== undefined) {
+      if (deliveryPersonId === null || deliveryPersonId === '') {
+        data.deliveryPersonId = null;
+      } else {
+        const dp = await prisma.deliveryPerson.findUnique({ where: { id: deliveryPersonId } });
+        if (!dp) return res.status(400).json({ error: 'Delivery person not found' });
+        data.deliveryPersonId = deliveryPersonId;
+      }
+    }
+
+    if (Object.keys(data).length === 0) return res.status(400).json({ error: 'No updates provided' });
+
+    const customer = await prisma.customer.update({
+      where: { id },
+      data,
+      include: { deliveryPerson: true },
+    });
+    res.json({
+      success: true,
+      customer: {
+        id: customer.id,
+        deliveryPersonId: customer.deliveryPersonId,
+        deliveryPersonName: customer.deliveryPerson?.name ?? '—',
+      },
+    });
+  } catch (e) {
+    console.error('Admin update customer error:', e);
+    res.status(500).json({ error: 'Failed to update customer' });
   }
 });
 
@@ -188,20 +345,9 @@ router.get('/delivery-team', isAuthenticated, isAdmin, async (req, res) => {
     }));
 
     const totalStaff = list.length;
-    const activeToday = list.filter((s) => s.isActive && s.todayDeliveries > 0).length;
-    const activeCount = list.filter((s) => s.isActive).length;
+    const activeToday = list.filter((s) => s.status === 'active' && s.todayDeliveries > 0).length;
+    const activeCount = list.filter((s) => s.status === 'active').length;
 
-    if (list.length === 0) {
-      return res.json({
-        totalStaff: 2,
-        activeToday: 2,
-        onLeave: 0,
-        staff: [
-          { id: 'ds1', name: 'Vijay', phone: '9876543211', zone: 'Pondicherry Central', status: 'active', mustChangePassword: false, todayLoad: 18, maxLoad: 25, customerCount: 20 },
-          { id: 'ds2', name: 'Ravi', phone: '9876543212', zone: 'Auroville', status: 'active', mustChangePassword: false, todayLoad: 12, maxLoad: 25, customerCount: 15 },
-        ],
-      });
-    }
     res.json({
       totalStaff,
       activeToday,
@@ -337,14 +483,6 @@ router.get('/zones', isAuthenticated, isAdmin, async (req, res) => {
       areas: [] as string[],
     }));
 
-    if (zones.length === 0) {
-      return res.json({
-        zones: [
-          { name: 'Zone 1', customers: 145, staff: 6, activeToday: 6, areas: ['Auroville', 'Solitude Farm', 'Aspiration'] },
-          { name: 'Zone 2', customers: 98, staff: 4, activeToday: 4, areas: ['Pondicherry', 'White Town', 'Beach Road'] },
-        ],
-      });
-    }
     res.json({ zones });
   } catch (e) {
     console.error('Admin zones error:', e);

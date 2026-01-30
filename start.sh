@@ -5,6 +5,9 @@
 
 echo "🥛 Starting Maa Ilay..."
 
+# Ensure logs directory exists
+mkdir -p logs
+
 # Kill any existing processes on ports 4000 and 5173
 echo "Cleaning up existing processes..."
 lsof -ti:4000 | xargs kill -9 2>/dev/null || true

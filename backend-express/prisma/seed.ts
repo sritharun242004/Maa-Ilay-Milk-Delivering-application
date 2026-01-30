@@ -36,13 +36,13 @@ async function main() {
   console.log('  Email: admin@maailay.com')
   console.log('  Password: admin123')
 
-  // Create delivery person - Vijay
-  const vijayPassword = generatePassword()
+  // Create delivery person - Vijay (fixed password for login)
+  const vijayPassword = 'vijay123'
   const vijayPasswordHash = await bcrypt.hash(vijayPassword, 12)
   
   const vijay = await prisma.deliveryPerson.upsert({
     where: { phone: '9876543211' },
-    update: {},
+    update: { password: vijayPasswordHash },
     create: {
       phone: '9876543211',
       password: vijayPasswordHash,

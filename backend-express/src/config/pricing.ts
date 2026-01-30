@@ -1,9 +1,14 @@
 /**
- * Maa Ilay pricing (Rs. and paise)
+ * My Life / Maa Ilay pricing (Rs. and paise)
  * 1L: ₹110/day, 2 bottles deposit ₹70 (every 90 days / every 4th cycle)
  * 500ml: ₹68/day, 2 bottles deposit ₹50 (every 90 days)
  * Payment date: 5th of every month
+ *
+ * Allowed daily quantities: 500 ml to 4 L (500, 1000, 1500, 2000, 2500, 3000, 3500, 4000 ml).
+ * Bottle load: 1L bottles + 500ml bottles (e.g. 2.5L = 2×1L + 1×500ml).
  */
+
+export const ALLOWED_DAILY_QUANTITIES_ML = [500, 1000, 1500, 2000, 2500, 3000, 3500, 4000] as const;
 
 export const PRICING = {
   // Per day (paise)
