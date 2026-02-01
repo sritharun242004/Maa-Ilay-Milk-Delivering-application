@@ -26,63 +26,62 @@ function tomorrowStart() {
  * Creates SCHEDULED Delivery rows if missing; does not overwrite existing rows.
  */
 export async function ensureTodayDeliveries(deliveryPersonId: string, today: Date): Promise<void> {
-  const customers = await prisma.customer.findMany({
-    where: {
-      deliveryPersonId,
-      status: 'ACTIVE',
-      subscription: {
-        status: 'ACTIVE',
-      },
-    },
-    include: {
-      subscription: true,
-      wallet: true,
-      pauses: {
-        where: {
-          pauseDate: today,
-        },
-      },
-    },
-  });
-
-  for (const c of customers) {
-    // Skip if paused for today
-    if (c.pauses.length > 0) continue;
-    const sub = c.subscription;
-    if (!sub) continue;
-    // Only include from subscription start date: e.g. plan 1 Feb–1 Mar → show in Today's Deliveries from 1 Feb onward
-    if (sub.startDate) {
-      const startDateOnly = new Date(sub.startDate);
-      startDateOnly.setHours(0, 0, 0, 0);
-      if (today < startDateOnly) continue; // subscription not yet started for this date
-    }
-    // Skip if not paid: balance less than 1 day's charge
-    const balancePaise = c.wallet?.balancePaise ?? 0;
-    if (balancePaise < sub.dailyPricePaise) continue;
-
-    const quantityMl = sub.dailyQuantityMl;
-    const largeBottles = sub.largeBotles ?? (quantityMl >= 1000 ? Math.floor(quantityMl / 1000) : 0);
-    const smallBottles = sub.smallBottles ?? (quantityMl % 1000 >= 500 ? 1 : 0);
-
-    await prisma.delivery.upsert({
+  const [eligibleCustomers, existingDeliveries] = await Promise.all([
+    prisma.customer.findMany({
       where: {
-        customerId_deliveryDate: {
-          customerId: c.id,
-          deliveryDate: today,
-        },
+        deliveryPersonId,
+        status: 'ACTIVE',
+        subscription: { status: 'ACTIVE' },
+        pauses: { none: { pauseDate: today } },
       },
-      create: {
+      include: { subscription: true, wallet: true },
+    }),
+    prisma.delivery.findMany({
+      where: { deliveryPersonId, deliveryDate: today },
+      select: { customerId: true },
+    }),
+  ]);
+
+  const existingSet = new Set(existingDeliveries.map((d) => d.customerId));
+  const newDeliveries = eligibleCustomers
+    .filter((c) => {
+      if (existingSet.has(c.id)) return false;
+      const sub = c.subscription;
+      if (!sub) return false;
+
+      // Start date check
+      if (sub.startDate) {
+        const startOnly = new Date(sub.startDate);
+        startOnly.setHours(0, 0, 0, 0);
+        if (today < startOnly) return false;
+      }
+
+      // Wallet balance check
+      const balance = c.wallet?.balancePaise ?? 0;
+      if (balance < sub.dailyPricePaise) return false;
+
+      return true;
+    })
+    .map((c) => {
+      const sub = c.subscription!;
+      const quantityMl = sub.dailyQuantityMl;
+      return {
         customerId: c.id,
         deliveryPersonId,
         deliveryDate: today,
         quantityMl,
-        largeBottles,
-        smallBottles,
+        largeBottles: sub.largeBotles ?? (quantityMl >= 1000 ? Math.floor(quantityMl / 1000) : 0),
+        smallBottles: sub.smallBottles ?? (quantityMl % 1000 >= 500 ? 1 : 0),
         chargePaise: sub.dailyPricePaise,
         depositPaise: 0,
-        status: 'SCHEDULED',
-      },
-      update: {},
+        status: 'SCHEDULED' as const,
+      };
+    });
+
+  if (newDeliveries.length > 0) {
+    await prisma.delivery.createMany({
+      data: newDeliveries,
+      skipDuplicates: true,
     });
   }
 }
@@ -176,12 +175,19 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
       start = todayStart();
       end = tomorrowStart();
     }
-    // Build list for this date (create Delivery rows if missing for this day)
+    // 1. Ensure rows exist (mostly for new subscriptions or after midnight)
     await ensureTodayDeliveries(req.user.id, start);
-    const rawDeliveries = await prisma.delivery.findMany({
+
+    // 2. Optimized Single Query: Fetching everything in one go with DB-side filtering
+    const deliveries = await prisma.delivery.findMany({
       where: {
         deliveryPersonId: req.user.id,
         deliveryDate: { gte: start, lt: end },
+        customer: {
+          status: 'ACTIVE',
+          pauses: { none: { pauseDate: start } }, // DB-side filtering for pauses
+          subscription: { isNot: null }
+        }
       },
       include: {
         customer: {
@@ -192,72 +198,69 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
             addressLine1: true,
             addressLine2: true,
             landmark: true,
+            wallet: { select: { balancePaise: true } },
+            subscription: true,
           },
         },
       },
       orderBy: { deliveryDate: 'asc' },
     });
-    // Exclude deliveries for customers who are paused today or have insufficient balance
-    const customerIds = rawDeliveries.map((d) => d.customerId);
-    const [pausedToday, customersWithWallet] = await Promise.all([
-      customerIds.length > 0
-        ? prisma.pause.findMany({
-            where: { customerId: { in: customerIds }, pauseDate: start },
-            select: { customerId: true },
-          })
-        : [],
-      customerIds.length > 0
-        ? prisma.customer.findMany({
-            where: { id: { in: customerIds } },
-            include: { subscription: true, wallet: true },
-          })
-        : [],
-    ]);
-    const pausedCustomerIds = new Set(pausedToday.map((p) => p.customerId));
-    const unpaidCustomerIds = new Set(
-      customersWithWallet
-        .filter((c) => {
-          const balance = c.wallet?.balancePaise ?? 0;
-          const oneDay = c.subscription?.dailyPricePaise ?? 0;
-          return oneDay > 0 && balance < oneDay;
-        })
-        .map((c) => c.id)
-    );
-    // Exclude customers whose subscription starts after today (e.g. plan 1 Feb–1 Mar → show from 1 Feb only)
-    const subscriptionNotStartedCustomerIds = new Set(
-      customersWithWallet
-        .filter((c) => {
-          const subStart = c.subscription?.startDate;
-          if (!subStart) return false;
-          const startOnly = new Date(subStart);
-          startOnly.setHours(0, 0, 0, 0);
-          return startOnly > start;
-        })
-        .map((c) => c.id)
-    );
-    const deliveries = rawDeliveries.filter(
-      (d) =>
-        !pausedCustomerIds.has(d.customerId) &&
-        !unpaidCustomerIds.has(d.customerId) &&
-        !subscriptionNotStartedCustomerIds.has(d.customerId)
-    );
-    const completed = deliveries.filter((d) => d.status === 'DELIVERED').length;
-    const totalLiters = deliveries.reduce((s, d) => s + d.quantityMl / 1000, 0);
-    const total1LBottles = deliveries.reduce((s, d) => s + d.largeBottles, 0);
-    const total500mlBottles = deliveries.reduce((s, d) => s + d.smallBottles, 0);
+
+    // 3. Detailed Data Fetching (Bottle Balances & Full Customer info)
+    // We need the latest bottle balance for the action page to be "pre-loaded"
+    const deliveriesWithBalances = await Promise.all(deliveries.map(async (d) => {
+      // Find latest bottle ledger for this customer
+      const lastLedger = await prisma.bottleLedger.findFirst({
+        where: { customerId: d.customerId },
+        orderBy: { createdAt: 'desc' },
+        select: { largeBottleBalanceAfter: true, smallBottleBalanceAfter: true },
+      });
+
+      return {
+        ...d,
+        bottleBalance: {
+          large: lastLedger?.largeBottleBalanceAfter ?? 0,
+          small: lastLedger?.smallBottleBalanceAfter ?? 0,
+        }
+      };
+    }));
+
+    // 4. Final lightweight validation (Wallet check, and start date check)
+    // We do this in JS only for wallet balance and edge cases of start dates
+    const filteredDeliveries = deliveriesWithBalances.filter(d => {
+      const c = d.customer;
+      if (!c || !c.subscription) return false;
+
+      // Start date check (in case subscription starts after today)
+      if (c.subscription.startDate) {
+        const subStart = new Date(c.subscription.startDate);
+        subStart.setHours(0, 0, 0, 0);
+        if (subStart > start) return false;
+      }
+
+      // Wallet check
+      const balance = c.wallet?.balancePaise ?? 0;
+      const oneDay = c.subscription.dailyPricePaise;
+      return balance >= oneDay;
+    });
+
+    const completed = filteredDeliveries.filter((d) => d.status === 'DELIVERED').length;
+    const totalLiters = filteredDeliveries.reduce((s, d) => s + d.quantityMl / 1000, 0);
+    const total1LBottles = filteredDeliveries.reduce((s, d) => s + d.largeBottles, 0);
+    const total500mlBottles = filteredDeliveries.reduce((s, d) => s + d.smallBottles, 0);
     const dateStr =
       dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
         ? dateParam
         : `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
     res.json({
       date: dateStr,
-      total: deliveries.length,
+      total: filteredDeliveries.length,
       completed,
-      pending: deliveries.length - completed,
+      pending: filteredDeliveries.length - completed,
       totalLiters: Math.round(totalLiters * 10) / 10,
       total1LBottles,
       total500mlBottles,
-      deliveries,
+      deliveries: filteredDeliveries,
     });
   } catch (error) {
     console.error('Delivery today error:', error);
@@ -361,23 +364,23 @@ router.get('/customer/:customerId', isAuthenticated, isDelivery, async (req, res
         status: customer.status,
         subscription: customer.subscription
           ? {
-              dailyQuantityMl: customer.subscription.dailyQuantityMl,
-              status: customer.subscription.status,
-            }
+            dailyQuantityMl: customer.subscription.dailyQuantityMl,
+            status: customer.subscription.status,
+          }
           : null,
       },
       delivery: delivery
         ? {
-            id: delivery.id,
-            deliveryDate: delivery.deliveryDate,
-            quantityMl: delivery.quantityMl,
-            largeBottles: delivery.largeBottles,
-            smallBottles: delivery.smallBottles,
-            status: delivery.status,
-            deliveryNotes: delivery.deliveryNotes,
-            largeBottlesCollected: delivery.largeBottlesCollected,
-            smallBottlesCollected: delivery.smallBottlesCollected,
-          }
+          id: delivery.id,
+          deliveryDate: delivery.deliveryDate,
+          quantityMl: delivery.quantityMl,
+          largeBottles: delivery.largeBottles,
+          smallBottles: delivery.smallBottles,
+          status: delivery.status,
+          deliveryNotes: delivery.deliveryNotes,
+          largeBottlesCollected: delivery.largeBottlesCollected,
+          smallBottlesCollected: delivery.smallBottlesCollected,
+        }
         : null,
       bottleBalance: {
         large: lastLedger?.largeBottleBalanceAfter ?? 0,
@@ -407,34 +410,150 @@ router.patch('/:id/mark', isAuthenticated, isDelivery, async (req, res) => {
       where: {
         id: deliveryId,
         deliveryPersonId: req.user.id,
-        deliveryDate: todayStart(),
+        // Allow marking for today or past dates (in case they missed it)
+        // deliveryDate: todayStart(), 
       },
+      include: {
+        customer: {
+          include: {
+            wallet: true,
+          }
+        }
+      }
     });
+
     if (!delivery) return res.status(404).json({ error: 'Delivery not found' });
 
-    const updates: {
-      status?: 'DELIVERED' | 'NOT_DELIVERED';
-      deliveredAt?: Date | null;
-      deliveryNotes?: string;
-      largeBottlesCollected?: number;
-      smallBottlesCollected?: number;
-    } = {};
-    if (body.status === 'DELIVERED' || body.status === 'NOT_DELIVERED') {
+    // 1. Prepare updates for the delivery record
+    const updates: any = {};
+    if (body.status) {
       updates.status = body.status;
       updates.deliveredAt = body.status === 'DELIVERED' ? new Date() : null;
-      if (body.status === 'NOT_DELIVERED') {
-        updates.largeBottlesCollected = 0;
-        updates.smallBottlesCollected = 0;
-      } else if (typeof body.largeBottlesCollected === 'number' || typeof body.smallBottlesCollected === 'number') {
-        updates.largeBottlesCollected = typeof body.largeBottlesCollected === 'number' ? body.largeBottlesCollected : 0;
-        updates.smallBottlesCollected = typeof body.smallBottlesCollected === 'number' ? body.smallBottlesCollected : 0;
-      }
     }
     if (typeof body.deliveryNotes === 'string') updates.deliveryNotes = body.deliveryNotes;
+    if (typeof body.largeBottlesCollected === 'number') updates.largeBottlesCollected = body.largeBottlesCollected;
+    if (typeof body.smallBottlesCollected === 'number') updates.smallBottlesCollected = body.smallBottlesCollected;
 
-    await prisma.delivery.update({
-      where: { id: deliveryId },
-      data: updates,
+    // 2. Business Logic: Wallet and Bottles
+    const customerId = delivery.customerId;
+    const isNewDelivery = body.status === 'DELIVERED' && delivery.status !== 'DELIVERED';
+
+    await prisma.$transaction(async (tx) => {
+      // A. Update delivery record
+      await tx.delivery.update({
+        where: { id: deliveryId },
+        data: updates,
+      });
+
+      // B. If newly delivered, deduct from wallet and issue bottles
+      if (isNewDelivery) {
+        const charge = delivery.chargePaise || 0;
+        if (charge > 0 && delivery.customer.wallet) {
+          const newBalance = delivery.customer.wallet.balancePaise - charge;
+          await tx.wallet.update({
+            where: { id: delivery.customer.wallet.id },
+            data: { balancePaise: newBalance }
+          });
+          await tx.walletTransaction.create({
+            data: {
+              walletId: delivery.customer.wallet.id,
+              type: 'MILK_CHARGE',
+              amountPaise: -charge,
+              balanceAfterPaise: newBalance,
+              description: `Milk delivery (${delivery.quantityMl}ml) on ${delivery.deliveryDate.toISOString().slice(0, 10)}`,
+              referenceType: 'delivery',
+              referenceId: delivery.id
+            }
+          });
+        }
+
+        // Issue bottles to customer ledger
+        if (delivery.largeBottles > 0 || delivery.smallBottles > 0) {
+          const lastLedger = await tx.bottleLedger.findFirst({
+            where: { customerId },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          let currentLarge = lastLedger?.largeBottleBalanceAfter ?? 0;
+          let currentSmall = lastLedger?.smallBottleBalanceAfter ?? 0;
+
+          if (delivery.largeBottles > 0) {
+            currentLarge += delivery.largeBottles;
+            await tx.bottleLedger.create({
+              data: {
+                customerId,
+                action: 'ISSUED',
+                size: 'LARGE',
+                quantity: delivery.largeBottles,
+                largeBottleBalanceAfter: currentLarge,
+                smallBottleBalanceAfter: currentSmall,
+                deliveryId: delivery.id,
+                description: `Delivered 1L bottles`
+              }
+            });
+          }
+          if (delivery.smallBottles > 0) {
+            currentSmall += delivery.smallBottles;
+            await tx.bottleLedger.create({
+              data: {
+                customerId,
+                action: 'ISSUED',
+                size: 'SMALL',
+                quantity: delivery.smallBottles,
+                largeBottleBalanceAfter: currentLarge,
+                smallBottleBalanceAfter: currentSmall,
+                deliveryId: delivery.id,
+                description: `Delivered 500ml bottles`
+              }
+            });
+          }
+        }
+      }
+
+      // C. Handle bottle collections (Independent of status upgrade, can happen any time)
+      const newLargeCollected = (body.largeBottlesCollected ?? 0) - (delivery.largeBottlesCollected || 0);
+      const newSmallCollected = (body.smallBottlesCollected ?? 0) - (delivery.smallBottlesCollected || 0);
+
+      if (newLargeCollected !== 0 || newSmallCollected !== 0) {
+        const lastLedger = await tx.bottleLedger.findFirst({
+          where: { customerId },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        let currentLarge = lastLedger?.largeBottleBalanceAfter ?? 0;
+        let currentSmall = lastLedger?.smallBottleBalanceAfter ?? 0;
+
+        if (newLargeCollected !== 0) {
+          currentLarge -= newLargeCollected;
+          await tx.bottleLedger.create({
+            data: {
+              customerId,
+              action: 'RETURNED',
+              size: 'LARGE',
+              quantity: Math.abs(newLargeCollected),
+              largeBottleBalanceAfter: currentLarge,
+              smallBottleBalanceAfter: currentSmall,
+              deliveryId: delivery.id,
+              description: newLargeCollected > 0 ? `Collected 1L bottles` : `Correction: Reduced collected 1L bottles`
+            }
+          });
+        }
+        if (newSmallCollected !== 0) {
+          currentSmall -= newSmallCollected;
+          await tx.bottleLedger.create({
+            data: {
+              customerId,
+              action: 'RETURNED',
+              size: 'SMALL',
+              quantity: Math.abs(newSmallCollected),
+              largeBottleBalanceAfter: currentLarge,
+              smallBottleBalanceAfter: currentSmall,
+              deliveryId: delivery.id,
+              description: newSmallCollected > 0 ? `Collected 500ml bottles` : `Correction: Reduced collected 500ml bottles`
+            }
+          });
+        }
+      }
     });
 
     res.json({ success: true });

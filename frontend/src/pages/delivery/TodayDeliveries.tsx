@@ -125,13 +125,15 @@ export const TodayDeliveries: React.FC = () => {
       .finally(() => setLoading(false));
   }, [selectedDate]);
 
-  if (loading) {
+  if (!profile && loading) {
     return (
       <DeliveryLayout>
-        <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-gray-600">Loading...</p>
+        <div className="max-w-7xl mx-auto py-8">
+          <div className="h-48 bg-gray-200 rounded-2xl animate-pulse mb-8" />
+          <div className="space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-16 bg-gray-100 rounded-xl animate-pulse" />
+            ))}
           </div>
         </div>
       </DeliveryLayout>
@@ -242,7 +244,15 @@ export const TodayDeliveries: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {deliveries.length === 0 ? (
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="border-b">
+                      <td colSpan={9} className="py-8 px-4">
+                        <div className="h-8 bg-gray-100 rounded animate-pulse" />
+                      </td>
+                    </tr>
+                  ))
+                ) : deliveries.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="py-8 px-4 text-center text-gray-500">
                       No deliveries for this date
@@ -253,7 +263,39 @@ export const TodayDeliveries: React.FC = () => {
                     <tr
                       key={d.id}
                       className="border-b hover:bg-gray-50 cursor-pointer"
-                      onClick={() => navigate(`/delivery/customer/${d.customer.id}`, { state: { date: selectedDate } })}
+                      onClick={() => {
+                        const pendingIds = deliveries
+                          .slice(index + 1)
+                          .filter(del => del.status !== 'DELIVERED')
+                          .map(del => del.customer.id);
+
+                        navigate(`/delivery/customer/${d.customer.id}`, {
+                          state: {
+                            date: selectedDate,
+                            nextCustomerId: pendingIds[0],
+                            remainingQueue: pendingIds.slice(1),
+                            preFetchedData: {
+                              customer: {
+                                ...d.customer,
+                                deliveryNotes: (d.customer as any).deliveryNotes || null,
+                                status: (d.customer as any).status || 'ACTIVE'
+                              },
+                              delivery: {
+                                id: d.id,
+                                deliveryDate: d.deliveryDate,
+                                quantityMl: d.quantityMl,
+                                largeBottles: d.largeBottles,
+                                smallBottles: d.smallBottles,
+                                status: d.status,
+                                deliveryNotes: (d as any).deliveryNotes || null,
+                                largeBottlesCollected: (d as any).largeBottlesCollected || 0,
+                                smallBottlesCollected: (d as any).smallBottlesCollected || 0,
+                              },
+                              bottleBalance: (d as any).bottleBalance
+                            }
+                          }
+                        });
+                      }}
                     >
                       <td className="py-4 px-4 font-semibold text-gray-900">{index + 1}</td>
                       <td className="py-4 px-4 font-medium">{d.customer.name}</td>
@@ -281,7 +323,30 @@ export const TodayDeliveries: React.FC = () => {
                             className="p-2 hover:bg-emerald-100 rounded-lg text-emerald-600"
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/delivery/customer/${d.customer.id}`, { state: { date: selectedDate } });
+                              navigate(`/delivery/customer/${d.customer.id}`, {
+                                state: {
+                                  date: selectedDate,
+                                  preFetchedData: {
+                                    customer: {
+                                      ...d.customer,
+                                      deliveryNotes: (d.customer as any).deliveryNotes || null,
+                                      status: (d.customer as any).status || 'ACTIVE'
+                                    },
+                                    delivery: {
+                                      id: d.id,
+                                      deliveryDate: d.deliveryDate,
+                                      quantityMl: d.quantityMl,
+                                      largeBottles: d.largeBottles,
+                                      smallBottles: d.smallBottles,
+                                      status: d.status,
+                                      deliveryNotes: (d as any).deliveryNotes || null,
+                                      largeBottlesCollected: (d as any).largeBottlesCollected || 0,
+                                      smallBottlesCollected: (d as any).smallBottlesCollected || 0,
+                                    },
+                                    bottleBalance: (d as any).bottleBalance
+                                  }
+                                }
+                              });
                             }}
                           >
                             <CheckCircle className="w-5 h-5" />

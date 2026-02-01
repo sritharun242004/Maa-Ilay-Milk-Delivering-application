@@ -190,8 +190,6 @@ router.get('/dashboard', isAuthenticated, isCustomer, async (req, res) => {
           dailyQuantityMl: sub.dailyQuantityMl,
           dailyPricePaise: sub.dailyPricePaise,
           dailyPriceRs: (sub.dailyPricePaise / 100).toFixed(2),
-          startDate: sub.startDate,
-          endDate: sub.endDate,
           largeBotles: sub.largeBotles,
           smallBottles: sub.smallBottles,
           currentCycleStart: sub.currentCycleStart,
@@ -374,7 +372,6 @@ router.post('/subscribe', isAuthenticated, isCustomer, async (req, res) => {
   }
 });
 
-
 // Get calendar data: pause days + paused dates + delivery status per date (from DB only)
 // Same concept as History: DELIVERED / PAUSED / NOT_DELIVERED per date
 // Query: ?year=2026&month=0 (month 0-based, Jan=0)
@@ -554,22 +551,43 @@ router.get('/history/deliveries', isAuthenticated, isCustomer, async (req, res) 
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     const limit = Math.min(Number(req.query.limit) || 30, 100);
+    const now = new Date();
+    const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+
     const deliveries = await prisma.delivery.findMany({
-      where: { customerId: req.user.id, deliveryDate: { lt: new Date(new Date().setHours(0, 0, 0, 0)) } },
+      where: {
+        customerId: req.user.id,
+        deliveryDate: { lt: tomorrowStart }
+      },
       orderBy: { deliveryDate: 'desc' },
       take: limit,
       include: { deliveryPerson: true },
     });
-    const list = deliveries.map((d) => ({
-      id: d.id,
-      date: d.deliveryDate.toISOString().slice(0, 10),
-      day: d.deliveryDate.toLocaleDateString('en-IN', { weekday: 'long' }),
-      quantityMl: d.quantityMl,
-      quantity: d.quantityMl === 1000 ? '1L' : '500ml',
-      status: d.status === 'DELIVERED' ? 'delivered' : d.status === 'NOT_DELIVERED' ? 'not-delivered' : 'paused',
-      person: d.deliveryPerson?.name ?? '—',
-      remarks: d.deliveryNotes ?? '',
-    }));
+
+    const list = deliveries.map((d) => {
+      let statusDisplay: 'delivered' | 'not-delivered' | 'paused' | 'pending' = 'pending';
+      if (d.status === 'DELIVERED') statusDisplay = 'delivered';
+      else if (d.status === 'NOT_DELIVERED') statusDisplay = 'not-delivered';
+      else if (['PAUSED', 'BLOCKED', 'HOLIDAY'].includes(d.status)) statusDisplay = 'paused';
+      else if (d.status === 'SCHEDULED') statusDisplay = 'pending';
+
+      const dDate = d.deliveryDate;
+      const y = dDate.getFullYear();
+      const m = String(dDate.getMonth() + 1).padStart(2, '0');
+      const dayNum = String(dDate.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${dayNum}`;
+
+      return {
+        id: d.id,
+        date: dateStr,
+        day: dDate.toLocaleDateString('en-IN', { weekday: 'long', timeZone: 'Asia/Kolkata' }),
+        quantityMl: d.quantityMl,
+        quantity: d.quantityMl === 1000 ? '1L' : '500ml',
+        status: statusDisplay,
+        person: d.deliveryPerson?.name ?? '—',
+        remarks: d.deliveryNotes ?? '',
+      };
+    });
     res.json({ deliveries: list });
   } catch (e) {
     console.error('History deliveries error:', e);

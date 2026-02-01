@@ -10,7 +10,7 @@ type DeliveryRow = {
   date: string;
   day: string;
   quantity: string;
-  status: 'delivered' | 'not-delivered' | 'paused';
+  status: 'delivered' | 'not-delivered' | 'paused' | 'pending';
   person: string;
   remarks: string;
 };
@@ -87,11 +87,10 @@ export const History: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                className={`flex-1 px-6 py-3 rounded-lg font-medium transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-transparent text-gray-600 hover:bg-gray-100'
-                }`}
+                className={`flex-1 px-6 py-3 rounded-lg font-medium transition-all ${activeTab === tab.id
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-transparent text-gray-600 hover:bg-gray-100'
+                  }`}
               >
                 {tab.label}
               </button>
@@ -131,6 +130,8 @@ export const History: React.FC = () => {
                             <Badge variant="success">Delivered</Badge>
                           ) : delivery.status === 'paused' ? (
                             <Badge className="bg-orange-100 text-orange-700">Paused</Badge>
+                          ) : delivery.status === 'pending' ? (
+                            <Badge className="bg-gray-100 text-gray-700">Pending</Badge>
                           ) : (
                             <Badge variant="error">Not Delivered</Badge>
                           )}
@@ -192,9 +193,8 @@ export const History: React.FC = () => {
                           bottleData.entries.map((ledger) => (
                             <tr
                               key={ledger.id}
-                              className={`border-b border-gray-200 ${
-                                ledger.type === 'issued' ? 'bg-red-50' : ledger.type === 'collected' ? 'bg-green-50' : ''
-                              }`}
+                              className={`border-b border-gray-200 ${ledger.type === 'issued' ? 'bg-red-50' : ledger.type === 'collected' ? 'bg-green-50' : ''
+                                }`}
                             >
                               <td className="py-4 px-4">{formatDateLocal(ledger.date, 'short')}</td>
                               <td className="py-4 px-4">

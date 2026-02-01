@@ -70,7 +70,24 @@ export const CustomerAction: React.FC = () => {
   useEffect(() => {
     if (!customerId) return;
     let cancelled = false;
-    setLoading(true);
+
+    // 1. Check for pre-fetched data in location state (Instant Load)
+    const preFetchedData = (location.state as any)?.preFetchedData as ActionPageData | undefined;
+    if (preFetchedData) {
+      setData(preFetchedData);
+      const dv = preFetchedData.delivery;
+      if (dv) {
+        if (dv.status === 'DELIVERED' || dv.status === 'NOT_DELIVERED') setDeliveryStatus(dv.status as any);
+        setLargeCollected(typeof dv.largeBottlesCollected === 'number' ? dv.largeBottlesCollected : 0);
+        setSmallCollected(typeof dv.smallBottlesCollected === 'number' ? dv.smallBottlesCollected : 0);
+        setRemarks(typeof dv.deliveryNotes === 'string' ? dv.deliveryNotes : '');
+      }
+      setLoading(false);
+      // We still run the fetch in background to sync (Optional: can skip if you want pure offline speed)
+    } else {
+      setLoading(true);
+    }
+
     setError(null);
     fetch(`/api/delivery/customer/${customerId}?date=${selectedDate}`, { credentials: 'include' })
       .then((res) => {
@@ -90,13 +107,13 @@ export const CustomerAction: React.FC = () => {
         }
       })
       .catch(() => {
-        if (!cancelled) setError('Customer not found');
+        if (!cancelled && !preFetchedData) setError('Customer not found');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [customerId, selectedDate]);
+  }, [customerId, selectedDate, location.state]);
 
   const handleSubmit = async () => {
     if (!data?.delivery || !deliveryStatus) {
@@ -122,7 +139,22 @@ export const CustomerAction: React.FC = () => {
         alert(err.error || 'Failed to update delivery');
         return;
       }
-      navigate('/delivery/today');
+      const nextId = (location.state as any)?.nextCustomerId;
+      const remainingQueue = (location.state as any)?.remainingQueue || [];
+
+      if (nextId) {
+        // Direct jump to next customer in queue
+        navigate(`/delivery/customer/${nextId}`, {
+          state: {
+            date: selectedDate,
+            nextCustomerId: remainingQueue[0],
+            remainingQueue: remainingQueue.slice(1)
+          },
+          replace: true // Replace current history entry to keep back-button sane
+        });
+      } else {
+        navigate('/delivery/today');
+      }
     } catch {
       alert('Failed to update delivery');
     } finally {
@@ -224,8 +256,8 @@ export const CustomerAction: React.FC = () => {
                 <button
                   onClick={() => setDeliveryStatus('DELIVERED')}
                   className={`py-6 rounded-xl font-bold text-lg flex flex-col items-center gap-3 transition-all ${deliveryStatus === 'DELIVERED'
-                      ? 'bg-emerald-500 text-white scale-105'
-                      : 'bg-white border-2 border-gray-300 hover:border-emerald-500'
+                    ? 'bg-emerald-500 text-white scale-105'
+                    : 'bg-white border-2 border-gray-300 hover:border-emerald-500'
                     }`}
                 >
                   <CheckCircle className="w-8 h-8" />
@@ -234,8 +266,8 @@ export const CustomerAction: React.FC = () => {
                 <button
                   onClick={() => setDeliveryStatus('NOT_DELIVERED')}
                   className={`py-6 rounded-xl font-bold text-lg flex flex-col items-center gap-3 transition-all ${deliveryStatus === 'NOT_DELIVERED'
-                      ? 'bg-red-500 text-white scale-105'
-                      : 'bg-white border-2 border-gray-300 hover:border-red-500'
+                    ? 'bg-red-500 text-white scale-105'
+                    : 'bg-white border-2 border-gray-300 hover:border-red-500'
                     }`}
                 >
                   <XCircle className="w-8 h-8" />
