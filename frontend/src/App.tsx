@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { DeliveryGuard } from './components/DeliveryGuard';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 import { Home } from './pages/Home';
 import { CustomerLogin } from './pages/auth/CustomerLogin';
@@ -20,7 +21,9 @@ import { Support } from './pages/customer/Support';
 
 import { AdminDashboard } from './pages/admin/Dashboard';
 import { AdminCustomers } from './pages/admin/Customers';
-import { DeliveryTeam, Zones, Inventory, Penalties, Reports, Settings } from './pages/admin/SimpleAdminPages';
+import { TodayDeliveries as AdminTodayDeliveries } from './pages/admin/TodayDeliveries';
+import { BottlesOut } from './pages/admin/BottlesOut';
+import { DeliveryTeam, Inventory, Penalties, Reports, Settings } from './pages/admin/SimpleAdminPages';
 
 import { TodayDeliveries } from './pages/delivery/TodayDeliveries';
 import { MyAssignees } from './pages/delivery/MyAssignees';
@@ -30,9 +33,10 @@ import { DeliveryChangePassword } from './pages/delivery/ChangePassword';
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router>
+          <Routes>
           <Route path="/" element={<Home />} />
 
           <Route path="/customer/login" element={<CustomerLogin />} />
@@ -99,6 +103,22 @@ function App() {
             }
           />
           <Route
+            path="/admin/today-deliveries"
+            element={
+              <ProtectedRoute allowedUserType="admin">
+                <AdminTodayDeliveries />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/bottles-out"
+            element={
+              <ProtectedRoute allowedUserType="admin">
+                <BottlesOut />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin/customers"
             element={
               <ProtectedRoute allowedUserType="admin">
@@ -111,14 +131,6 @@ function App() {
             element={
               <ProtectedRoute allowedUserType="admin">
                 <DeliveryTeam />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/zones"
-            element={
-              <ProtectedRoute allowedUserType="admin">
-                <Zones />
               </ProtectedRoute>
             }
           />
@@ -208,6 +220,7 @@ function App() {
         </Routes>
       </Router>
     </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

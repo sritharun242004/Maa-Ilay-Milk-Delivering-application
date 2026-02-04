@@ -3,13 +3,14 @@ import { AdminLayout } from '../../components/layouts/AdminLayout';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Plus, MoreVertical, Pencil, KeyRound } from 'lucide-react';
+import { Plus, Pencil, KeyRound } from 'lucide-react';
+import { useDeliveryTeam } from '../../hooks/useCachedData';
+import { fetchWithCsrf, clearCsrfToken } from '../../utils/csrf';
 
 type StaffRow = {
   id: string;
   name: string;
   phone: string;
-  zone: string;
   status: string;
   mustChangePassword?: boolean;
   todayLoad: number;
@@ -19,38 +20,19 @@ type StaffRow = {
 type DeliveryTeamData = {
   totalStaff: number;
   activeToday: number;
-  onLeave: number;
   staff: StaffRow[];
 };
 
-const ZONE_OPTIONS = ['Pondicherry Central', 'Auroville', 'White Town', 'Beach Road'];
 
 export const DeliveryTeam: React.FC = () => {
-  const [data, setData] = useState<DeliveryTeamData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Use cached data hook with 1-hour TTL
+  const { data, loading, error, refetch: fetchTeam } = useDeliveryTeam();
+
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<StaffRow | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [oneTimePassword, setOneTimePassword] = useState<string | null>(null);
-
-  const fetchTeam = useCallback(() => {
-    setLoading(true);
-    fetch('/api/admin/delivery-team', { credentials: 'include' })
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to load delivery team');
-        return res.json();
-      })
-      .then(setData)
-      .catch(() => setError('Could not load delivery team'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    fetchTeam();
-  }, [fetchTeam]);
 
   const openEdit = (staff: StaffRow) => {
     setSelectedStaff(staff);
@@ -60,7 +42,6 @@ export const DeliveryTeam: React.FC = () => {
   const openReset = (staff: StaffRow) => {
     setSelectedStaff(staff);
     setActionError(null);
-    setOneTimePassword(null);
     setResetOpen(true);
   };
 
@@ -101,7 +82,7 @@ export const DeliveryTeam: React.FC = () => {
             Add delivery person
           </Button>
         </div>
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
           <Card className="p-6">
             <p className="text-sm text-gray-600 mb-1">Total Delivery Staff</p>
             <p className="text-4xl font-bold text-gray-900">{d.totalStaff}</p>
@@ -109,10 +90,6 @@ export const DeliveryTeam: React.FC = () => {
           <Card className="p-6">
             <p className="text-sm text-gray-600 mb-1">Active Today</p>
             <p className="text-4xl font-bold text-emerald-600">{d.activeToday}</p>
-          </Card>
-          <Card className="p-6">
-            <p className="text-sm text-gray-600 mb-1">On Leave</p>
-            <p className="text-4xl font-bold text-orange-600">{d.onLeave}</p>
           </Card>
         </div>
         <Card className="overflow-hidden">
@@ -122,7 +99,6 @@ export const DeliveryTeam: React.FC = () => {
                 <tr>
                   <th className="text-left py-3 px-4 text-sm font-semibold">Name</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold">Phone</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold">Zone</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold">Status</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold">Today&apos;s Load</th>
                   <th className="text-center py-3 px-4 text-sm font-semibold">Actions</th>
@@ -133,7 +109,6 @@ export const DeliveryTeam: React.FC = () => {
                   <tr key={staff.id} className="border-b border-gray-200 hover:bg-gray-50">
                     <td className="py-4 px-4 font-medium">{staff.name}</td>
                     <td className="py-4 px-4">{staff.phone}</td>
-                    <td className="py-4 px-4">{staff.zone}</td>
                     <td className="py-4 px-4">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Badge variant={staff.status === 'active' ? 'success' : 'warning'}>
@@ -177,7 +152,6 @@ export const DeliveryTeam: React.FC = () => {
 
       {addOpen && (
         <AddDeliveryModal
-          zoneOptions={ZONE_OPTIONS}
           onClose={() => setAddOpen(false)}
           onSuccess={() => {
             setAddOpen(false);
@@ -189,7 +163,6 @@ export const DeliveryTeam: React.FC = () => {
       {editOpen && selectedStaff && (
         <EditDeliveryModal
           staff={selectedStaff}
-          zoneOptions={ZONE_OPTIONS}
           onClose={() => {
             setEditOpen(false);
             setSelectedStaff(null);
@@ -208,15 +181,11 @@ export const DeliveryTeam: React.FC = () => {
           onClose={() => {
             setResetOpen(false);
             setSelectedStaff(null);
-            setOneTimePassword(null);
           }}
-          onSuccess={(oneTime) => {
-            setOneTimePassword(oneTime);
-          }}
+          onSuccess={() => { }}
           onDone={() => {
             setResetOpen(false);
             setSelectedStaff(null);
-            setOneTimePassword(null);
             fetchTeam();
           }}
           onError={setActionError}
@@ -232,19 +201,16 @@ export const DeliveryTeam: React.FC = () => {
 };
 
 function AddDeliveryModal({
-  zoneOptions,
   onClose,
   onSuccess,
   onError,
 }: {
-  zoneOptions: string[];
   onClose: () => void;
   onSuccess: () => void;
   onError: (msg: string | null) => void;
 }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [zone, setZone] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -261,14 +227,12 @@ function AddDeliveryModal({
       return;
     }
     setSubmitting(true);
-    fetch('/api/admin/delivery-team', {
+    fetchWithCsrf('/api/admin/delivery-team', {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: name.trim(),
         phone: phone.replace(/\D/g, ''),
-        zone: zone.trim() || undefined,
         password,
       }),
     })
@@ -277,7 +241,12 @@ function AddDeliveryModal({
         if (ok) {
           onSuccess();
         } else {
-          onError(data?.error || 'Failed to add delivery person');
+          if (data?.error?.includes('CSRF')) {
+            clearCsrfToken();
+            onError('Invalid CSRF token. Please refresh the page and try again.');
+          } else {
+            onError(data?.error || 'Failed to add delivery person');
+          }
         }
       })
       .catch(() => onError('Request failed'))
@@ -313,19 +282,6 @@ function AddDeliveryModal({
               className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
               placeholder="9876543210"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Zone</label>
-            <select
-              value={zone}
-              onChange={(e) => setZone(e.target.value)}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
-            >
-              <option value="">— Select zone —</option>
-              {zoneOptions.map((z) => (
-                <option key={z} value={z}>{z}</option>
-              ))}
-            </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Initial password (min 6 chars)</label>
@@ -365,20 +321,17 @@ function AddDeliveryModal({
 
 function EditDeliveryModal({
   staff,
-  zoneOptions,
   onClose,
   onSuccess,
   onError,
 }: {
   staff: StaffRow;
-  zoneOptions: string[];
   onClose: () => void;
   onSuccess: () => void;
   onError: (msg: string | null) => void;
 }) {
   const [name, setName] = useState(staff.name);
   const [phone, setPhone] = useState(staff.phone);
-  const [zone, setZone] = useState(staff.zone === '—' ? '' : staff.zone);
   const [isActive, setIsActive] = useState(staff.status === 'active');
   const [submitting, setSubmitting] = useState(false);
 
@@ -393,7 +346,6 @@ function EditDeliveryModal({
       body: JSON.stringify({
         name: name.trim(),
         phone: phone.replace(/\D/g, ''),
-        zone: zone.trim() || null,
         isActive,
       }),
     })
@@ -435,19 +387,6 @@ function EditDeliveryModal({
               maxLength={10}
               className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Zone</label>
-            <select
-              value={zone}
-              onChange={(e) => setZone(e.target.value)}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
-            >
-              <option value="">— Select zone —</option>
-              {zoneOptions.map((z) => (
-                <option key={z} value={z}>{z}</option>
-              ))}
-            </select>
           </div>
           <div className="flex items-center gap-2">
             <input
@@ -503,9 +442,8 @@ function ResetPasswordModal({
       return;
     }
     setSubmitting(true);
-    fetch(`/api/admin/delivery-team/${staff.id}/reset-password`, {
+    fetchWithCsrf(`/api/admin/delivery-team/${staff.id}/reset-password`, {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ newPassword }),
     })
@@ -517,7 +455,12 @@ function ResetPasswordModal({
         } else if (ok) {
           onDone();
         } else {
-          onError(data?.error || 'Failed to reset password');
+          if (data?.error?.includes('CSRF')) {
+            clearCsrfToken();
+            onError('Invalid CSRF token. Please refresh the page and try again.');
+          } else {
+            onError(data?.error || 'Failed to reset password');
+          }
         }
       })
       .catch(() => onError('Request failed'))
@@ -585,84 +528,7 @@ function ResetPasswordModal({
   );
 }
 
-type ZoneData = { name: string; customers: number; staff: number; activeToday: number; areas: string[] };
-
-export const Zones: React.FC = () => {
-  const [zones, setZones] = useState<ZoneData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch('/api/admin/zones', { credentials: 'include' })
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to load zones');
-        return res.json();
-      })
-      .then((data) => setZones(data.zones ?? []))
-      .catch(() => setError('Could not load zones'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading && zones.length === 0) {
-    return (
-      <AdminLayout>
-        <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[40vh]">
-          <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      </AdminLayout>
-    );
-  }
-  if (error && zones.length === 0) {
-    return (
-      <AdminLayout>
-        <div className="max-w-7xl mx-auto py-12 text-center text-red-600">{error}</div>
-      </AdminLayout>
-    );
-  }
-  const borders = ['border-emerald-500', 'border-purple-500', 'border-blue-500'];
-  return (
-    <AdminLayout>
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">Zones</h1>
-        <p className="text-gray-600 mb-8">Customers and staff by zone (data from database)</p>
-        <div className="grid md:grid-cols-2 gap-8">
-          {zones.map((zone, i) => (
-            <Card key={zone.name} className={`p-8 border-4 ${borders[i % borders.length]}`}>
-              <Badge variant={i === 0 ? 'success' : 'info'} className="mb-4">
-                {i === 0 ? 'Primary Zone' : 'Zone'}
-              </Badge>
-              <h2 className="text-3xl font-bold mb-6">{zone.name}</h2>
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <div>
-                  <p className="text-sm text-gray-600">Customers</p>
-                  <p className="text-2xl font-bold">{zone.customers}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Active Today</p>
-                  <p className="text-2xl font-bold text-emerald-600">{zone.activeToday}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Staff</p>
-                  <p className="text-2xl font-bold">{zone.staff}</p>
-                </div>
-              </div>
-              {zone.areas && zone.areas.length > 0 && (
-                <>
-                  <p className="text-sm text-gray-600 mb-2">Coverage Areas:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {zone.areas.map((area) => (
-                      <Badge key={area}>{area}</Badge>
-                    ))}
-                  </div>
-                </>
-              )}
-            </Card>
-          ))}
-        </div>
-      </div>
-    </AdminLayout>
-  );
-};
+;
 
 type InventoryData = {
   totalBottles: number;
@@ -736,10 +602,23 @@ export const Inventory: React.FC = () => {
   );
 };
 
+type FlaggedCustomer = {
+  id: string;
+  name: string;
+  phone: string;
+  deliveryPersonName: string;
+  largeBottles: number;
+  smallBottles: number;
+  totalBottles: number;
+  oldestBottleDate: string;
+  daysOverdue: number;
+};
+
 type PenaltiesData = {
   totalPendingRs: number;
   collectedThisMonthRs: number;
-  flaggedCustomers: number;
+  flaggedCustomersCount: number;
+  flaggedCustomers: FlaggedCustomer[];
   rules: string[];
 };
 
@@ -747,8 +626,13 @@ export const Penalties: React.FC = () => {
   const [data, setData] = useState<PenaltiesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<FlaggedCustomer | null>(null);
+  const [imposing, setImposing] = useState(false);
+  const [imposeResult, setImposeResult] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchData = () => {
+    setLoading(true);
+    setError(null);
     fetch('/api/admin/penalties', { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load penalties');
@@ -757,6 +641,10 @@ export const Penalties: React.FC = () => {
       .then(setData)
       .catch(() => setError('Could not load penalties'))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchData();
   }, []);
 
   if (loading && !data) {
@@ -780,33 +668,267 @@ export const Penalties: React.FC = () => {
     <AdminLayout>
       <div className="max-w-7xl mx-auto">
         <h1 className="text-4xl font-bold text-gray-900 mb-2">Penalties</h1>
-        <p className="text-gray-600 mb-8">Penalty summary (data from database)</p>
+        <p className="text-gray-600 mb-8">Real-time penalty tracking (bottles not returned after 3 days)</p>
+
+        {imposeResult && (
+          <div className={`mb-6 p-4 rounded-lg ${imposeResult.startsWith('✓') ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+            {imposeResult}
+          </div>
+        )}
+
         <div className="grid md:grid-cols-3 gap-6 mb-8">
           <Card className="p-6">
             <p className="text-sm text-gray-600 mb-1">Total Pending</p>
             <p className="text-4xl font-bold text-orange-600">₹{d.totalPendingRs.toLocaleString('en-IN')}</p>
+            <p className="text-xs text-gray-500 mt-2">Penalties yet to be charged</p>
           </Card>
           <Card className="p-6">
             <p className="text-sm text-gray-600 mb-1">Collected This Month</p>
             <p className="text-4xl font-bold text-emerald-600">₹{d.collectedThisMonthRs.toLocaleString('en-IN')}</p>
+            <p className="text-xs text-gray-500 mt-2">Total penalties charged</p>
           </Card>
           <Card className="p-6">
             <p className="text-sm text-gray-600 mb-1">Flagged Customers</p>
-            <p className="text-4xl font-bold text-red-600">{d.flaggedCustomers}</p>
+            <p className="text-4xl font-bold text-red-600">{d.flaggedCustomersCount}</p>
+            <p className="text-xs text-gray-500 mt-2">Customers with overdue bottles</p>
           </Card>
         </div>
-        <Card className="p-6">
+
+        <Card className="p-6 mb-8">
           <h2 className="text-2xl font-bold mb-4">Penalty Rules</h2>
           <ul className="space-y-2 text-gray-700">
             {d.rules.map((rule, i) => (
-              <li key={i}>• {rule}</li>
+              <li key={i} className="flex items-start gap-2">
+                <span className="text-orange-600 font-bold">•</span>
+                <span>{rule}</span>
+              </li>
             ))}
           </ul>
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <strong>Note:</strong> Review flagged customers below and manually impose fines as needed. Admin can adjust penalty amounts before imposing.
+            </p>
+          </div>
         </Card>
+
+        {d.flaggedCustomers && d.flaggedCustomers.length > 0 && (
+          <Card className="p-6">
+            <h2 className="text-2xl font-bold mb-4">Flagged Customers</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Name</th>
+                    <th className="text-center py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Bottles</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Delivered By</th>
+                    <th className="text-center py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Days Overdue</th>
+                    <th className="text-center py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.flaggedCustomers.map((customer) => (
+                    <tr key={customer.id} className="border-b border-gray-200 hover:bg-red-50 transition-colors">
+                      <td className="py-4 px-4">
+                        <p className="font-medium text-gray-900">{customer.name}</p>
+                        <p className="text-sm text-gray-500">{customer.phone}</p>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <div className="flex flex-col gap-1">
+                          {customer.largeBottles > 0 && (
+                            <span className="text-sm font-medium text-blue-700">
+                              {customer.largeBottles} × 1L
+                            </span>
+                          )}
+                          {customer.smallBottles > 0 && (
+                            <span className="text-sm font-medium text-purple-700">
+                              {customer.smallBottles} × 500ml
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 text-gray-700 font-medium">
+                        {customer.deliveryPersonName}
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <span className="inline-block px-3 py-1 bg-red-100 text-red-700 font-bold rounded-full">
+                          {customer.daysOverdue} days
+                        </span>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <Button
+                          onClick={() => setSelectedCustomer(customer)}
+                          variant="primary"
+                          className="bg-orange-600 hover:bg-orange-700"
+                        >
+                          Impose Fine
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
       </div>
+
+      {/* Impose Fine Modal */}
+      {selectedCustomer && (
+        <ImposeFineModal
+          customer={selectedCustomer}
+          onClose={() => {
+            setSelectedCustomer(null);
+            setImposeResult(null);
+          }}
+          onSuccess={(message) => {
+            setImposeResult(`✓ ${message}`);
+            setSelectedCustomer(null);
+            setTimeout(() => fetchData(), 500);
+          }}
+          onError={(message) => {
+            setImposeResult(`✗ ${message}`);
+          }}
+          imposing={imposing}
+          setImposing={setImposing}
+        />
+      )}
     </AdminLayout>
   );
 };
+
+function ImposeFineModal({
+  customer,
+  onClose,
+  onSuccess,
+  onError,
+  imposing,
+  setImposing,
+}: {
+  customer: FlaggedCustomer;
+  onClose: () => void;
+  onSuccess: (message: string) => void;
+  onError: (message: string) => void;
+  imposing: boolean;
+  setImposing: (val: boolean) => void;
+}) {
+  const [largeBottlePrice, setLargeBottlePrice] = useState('35');
+  const [smallBottlePrice, setSmallBottlePrice] = useState('25');
+
+  const totalAmount = (customer.largeBottles * parseFloat(largeBottlePrice || '0')) + (customer.smallBottles * parseFloat(smallBottlePrice || '0'));
+
+  const handleImpose = async () => {
+    onError('');
+    const largePriceNum = parseFloat(largeBottlePrice);
+    const smallPriceNum = parseFloat(smallBottlePrice);
+
+    if (isNaN(largePriceNum) || largePriceNum < 0) {
+      onError('Invalid price for 1L bottles');
+      return;
+    }
+    if (isNaN(smallPriceNum) || smallPriceNum < 0) {
+      onError('Invalid price for 500ml bottles');
+      return;
+    }
+
+    setImposing(true);
+    try {
+      const response = await fetchWithCsrf('/api/admin/penalties/impose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: customer.id,
+          largeBottlePriceRs: largePriceNum,
+          smallBottlePriceRs: smallPriceNum,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to impose penalty');
+      }
+
+      const result = await response.json();
+      onSuccess(result.message);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed to impose penalty');
+    } finally {
+      setImposing(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <Card className="w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Impose Fine</h2>
+
+        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+          <p className="text-sm text-gray-600 mb-1">Customer</p>
+          <p className="font-semibold text-gray-900">{customer.name}</p>
+          <p className="text-sm text-gray-500">{customer.phone}</p>
+          <p className="text-xs text-gray-500 mt-2">
+            Delivered by: <span className="font-medium">{customer.deliveryPersonName}</span>
+          </p>
+        </div>
+
+        <div className="space-y-4 mb-6">
+          {customer.largeBottles > 0 && (
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-700 mb-1">1L Bottles</p>
+                <p className="text-2xl font-bold text-blue-700">{customer.largeBottles}</p>
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Price per bottle (₹)</label>
+                <input
+                  type="number"
+                  value={largeBottlePrice}
+                  onChange={(e) => setLargeBottlePrice(e.target.value)}
+                  min="0"
+                  step="0.01"
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-orange-500 outline-none"
+                />
+              </div>
+            </div>
+          )}
+
+          {customer.smallBottles > 0 && (
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-700 mb-1">500ml Bottles</p>
+                <p className="text-2xl font-bold text-purple-700">{customer.smallBottles}</p>
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Price per bottle (₹)</label>
+                <input
+                  type="number"
+                  value={smallBottlePrice}
+                  onChange={(e) => setSmallBottlePrice(e.target.value)}
+                  min="0"
+                  step="0.01"
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-orange-500 outline-none"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+          <p className="text-sm text-orange-700 font-medium mb-1">Total Penalty Amount</p>
+          <p className="text-3xl font-bold text-orange-900">₹{totalAmount.toFixed(2)}</p>
+        </div>
+
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={onClose} className="flex-1" disabled={imposing}>
+            Cancel
+          </Button>
+          <Button onClick={handleImpose} className="flex-1 bg-orange-600 hover:bg-orange-700" disabled={imposing}>
+            {imposing ? 'Imposing...' : 'Impose Fine'}
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
 
 export const Reports: React.FC = () => {
   return (

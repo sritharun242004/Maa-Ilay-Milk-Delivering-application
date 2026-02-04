@@ -6,6 +6,8 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Search, MoreVertical, User, X, Calendar, Wallet, Package, Receipt } from 'lucide-react';
 import { formatDateLocal } from '../../lib/date';
+import { useDeliveryTeam } from '../../hooks/useCachedData';
+import { fetchWithCsrf } from '../../utils/csrf';
 
 type CustomerRow = {
   id: string;
@@ -15,7 +17,6 @@ type CustomerRow = {
   address: string;
   plan: string;
   status: string;
-  zone: string;
   deliveryPersonId: string | null;
   deliveryPersonName: string;
 };
@@ -33,7 +34,7 @@ type CustomerDetail = {
     pincode: string;
     status: string;
     deliveryNotes: string | null;
-    deliveryPerson: { id: string; name: string; zone: string | null } | null;
+    deliveryPerson: { id: string; name: string } | null;
   };
   wallet: { balancePaise: number; balanceRs: string } | null;
   lastTransaction: {
@@ -56,19 +57,22 @@ type CustomerDetail = {
     year: number;
     month: number;
     pausedDates: string[];
-    deliveryStatusByDate: Record<string, 'DELIVERED' | 'PAUSED' | 'NOT_DELIVERED'>;
+    modificationsByDate: Record<string, { quantityMl: number; largeBottles: number; smallBottles: number; notes: string | null }>;
+    deliveryStatusByDate: Record<string, 'DELIVERED' | 'PAUSED' | 'NOT_DELIVERED' | 'SCHEDULED'>;
   };
 };
 
-type StaffRow = { id: string; name: string; phone: string; zone: string };
+type StaffRow = { id: string; name: string; phone: string };
 
 export const AdminCustomers: React.FC = () => {
+  // Use cached delivery team data
+  const { data: deliveryTeamData } = useDeliveryTeam();
+
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [zoneFilter, setZoneFilter] = useState('all');
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -80,7 +84,11 @@ export const AdminCustomers: React.FC = () => {
   const [reassignCustomer, setReassignCustomer] = useState<CustomerRow | null>(null);
   const [staffList, setStaffList] = useState<StaffRow[]>([]);
   const [reassignPersonId, setReassignPersonId] = useState('');
+  const [deliveryStartDate, setDeliveryStartDate] = useState('');
   const [reassignSubmitting, setReassignSubmitting] = useState(false);
+  const [selectedDeliveryDate, setSelectedDeliveryDate] = useState<string | null>(null);
+  const [deliveryDetails, setDeliveryDetails] = useState<any>(null);
+  const [deliveryDetailsLoading, setDeliveryDetailsLoading] = useState(false);
 
   const fetchCustomers = useCallback((showLoading = true) => {
     if (showLoading) {
@@ -90,7 +98,6 @@ export const AdminCustomers: React.FC = () => {
     const params = new URLSearchParams();
     if (search) params.set('search', search);
     if (statusFilter !== 'all') params.set('status', statusFilter);
-    if (zoneFilter !== 'all') params.set('zone', zoneFilter);
     const cacheKey = `${CUSTOMERS_CACHE_KEY}_${params.toString()}`;
     fetch(`/api/admin/customers?${params}`, { credentials: 'include' })
       .then((res) => {
@@ -108,13 +115,12 @@ export const AdminCustomers: React.FC = () => {
       })
       .catch(() => setError('Could not load customers'))
       .finally(() => setLoading(false));
-  }, [search, statusFilter, zoneFilter]);
+  }, [search, statusFilter]);
 
   useEffect(() => {
     const params = new URLSearchParams();
     if (search) params.set('search', search);
     if (statusFilter !== 'all') params.set('status', statusFilter);
-    if (zoneFilter !== 'all') params.set('zone', zoneFilter);
     const cacheKey = `${CUSTOMERS_CACHE_KEY}_${params.toString()}`;
     try {
       const raw = sessionStorage.getItem(cacheKey);
@@ -133,7 +139,7 @@ export const AdminCustomers: React.FC = () => {
     }
     fetchCustomers(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, statusFilter, zoneFilter]);
+  }, [search, statusFilter]);
 
   useEffect(() => {
     if (!menuOpenId) {
@@ -170,24 +176,48 @@ export const AdminCustomers: React.FC = () => {
 
   useEffect(() => {
     if (!reassignCustomer) return;
-    fetch('/api/admin/delivery-team', { credentials: 'include' })
-      .then((res) => res.ok ? res.json() : { staff: [] })
-      .then((data) => setStaffList(data.staff ?? []))
-      .catch(() => setStaffList([]));
+    // Use cached delivery team data instead of fetching
+    if (deliveryTeamData) {
+      setStaffList(deliveryTeamData.staff ?? []);
+    }
     setReassignPersonId(reassignCustomer.deliveryPersonId ?? '');
-  }, [reassignCustomer]);
+    // Set default start date to tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    setDeliveryStartDate(tomorrow.toISOString().split('T')[0]);
+  }, [reassignCustomer, deliveryTeamData]);
+
+  useEffect(() => {
+    if (!selectedDeliveryDate || !detailCustomerId) {
+      setDeliveryDetails(null);
+      return;
+    }
+    setDeliveryDetailsLoading(true);
+    setDeliveryDetails(null);
+    fetch(`/api/admin/customers/${detailCustomerId}/delivery/${selectedDeliveryDate}`, { credentials: 'include' })
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load delivery details');
+        return res.json();
+      })
+      .then((data) => setDeliveryDetails(data.delivery))
+      .catch(() => setDeliveryDetails(null))
+      .finally(() => setDeliveryDetailsLoading(false));
+  }, [selectedDeliveryDate, detailCustomerId]);
 
   const handleReassignSubmit = () => {
     if (!reassignCustomer) return;
     setReassignSubmitting(true);
-    const body = reassignPersonId ? { deliveryPersonId: reassignPersonId } : { deliveryPersonId: null };
-    fetch(`/api/admin/customers/${reassignCustomer.id}`, {
+    const body: any = reassignPersonId ? { deliveryPersonId: reassignPersonId } : { deliveryPersonId: null };
+    // Include start date if delivery person is being assigned
+    if (reassignPersonId && deliveryStartDate) {
+      body.deliveryStartDate = deliveryStartDate;
+    }
+    fetchWithCsrf(`/api/admin/customers/${reassignCustomer.id}`, {
       method: 'PATCH',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-        .then((res) => {
+      .then((res) => {
         if (!res.ok) return res.json().then((d) => Promise.reject(new Error(d?.error || 'Failed')));
         fetchCustomers(true);
         setReassignCustomer(null);
@@ -197,9 +227,9 @@ export const AdminCustomers: React.FC = () => {
   };
 
   const statusVariant = (s: string) =>
-    s === 'ACTIVE' ? 'success' : s === 'PENDING_APPROVAL' ? 'warning' : 'default';
+    s === 'ACTIVE' ? 'success' : s === 'PENDING_APPROVAL' ? 'warning' : s === 'PENDING_PAYMENT' ? 'default' : 'default';
   const statusLabel = (s: string) =>
-    s === 'PENDING_APPROVAL' ? 'Pending' : s === 'ACTIVE' ? 'Active' : s.replace(/_/g, ' ');
+    s === 'PENDING_PAYMENT' ? 'Visitor' : s === 'PENDING_APPROVAL' ? 'Pending' : s === 'ACTIVE' ? 'Active' : s.replace(/_/g, ' ');
 
   return (
     <AdminLayout>
@@ -229,16 +259,8 @@ export const AdminCustomers: React.FC = () => {
               <option value="all">All Status</option>
               <option value="ACTIVE">Active</option>
               <option value="PENDING_APPROVAL">Pending</option>
+              <option value="PENDING_PAYMENT">Visitor</option>
               <option value="INACTIVE">Inactive</option>
-            </select>
-            <select
-              value={zoneFilter}
-              onChange={(e) => setZoneFilter(e.target.value)}
-              className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
-            >
-              <option value="all">All Zones</option>
-              <option value="Pondicherry Central">Pondicherry Central</option>
-              <option value="Auroville">Auroville</option>
             </select>
           </div>
         </Card>
@@ -333,39 +355,39 @@ export const AdminCustomers: React.FC = () => {
         const customer = customers.find((c) => c.id === menuOpenId);
         if (!customer) return null;
         return createPortal(
-            <div
-              ref={menuRef}
-              className="fixed z-[100] py-1 bg-white border border-gray-200 rounded-lg shadow-xl min-w-[180px]"
-              style={{
-                top: menuAnchor.y - 8,
-                left: menuAnchor.x,
-                transform: 'translate(-100%, -100%)',
+          <div
+            ref={menuRef}
+            className="fixed z-[100] py-1 bg-white border border-gray-200 rounded-lg shadow-xl min-w-[180px]"
+            style={{
+              top: menuAnchor.y - 8,
+              left: menuAnchor.x,
+              transform: 'translate(-100%, -100%)',
+            }}
+          >
+            <button
+              type="button"
+              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+              onClick={() => {
+                setDetailCustomerId(customer.id);
+                setMenuOpenId(null);
+                setMenuAnchor(null);
               }}
             >
-              <button
-                type="button"
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-                onClick={() => {
-                  setDetailCustomerId(customer.id);
-                  setMenuOpenId(null);
-                  setMenuAnchor(null);
-                }}
-              >
-                <User className="w-4 h-4" /> View profile
-              </button>
-              <button
-                type="button"
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-                onClick={() => {
-                  setReassignCustomer(customer);
-                  setMenuOpenId(null);
-                  setMenuAnchor(null);
-                }}
-              >
-                <Package className="w-4 h-4" /> Reassign delivery person
-              </button>
-            </div>,
-            document.body
+              <User className="w-4 h-4" /> View profile
+            </button>
+            <button
+              type="button"
+              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+              onClick={() => {
+                setReassignCustomer(customer);
+                setMenuOpenId(null);
+                setMenuAnchor(null);
+              }}
+            >
+              <Package className="w-4 h-4" /> Reassign delivery person
+            </button>
+          </div>,
+          document.body
         );
       })()}
 
@@ -409,7 +431,7 @@ export const AdminCustomers: React.FC = () => {
                       <div><dt className="text-gray-500">Phone</dt><dd className="font-medium">{detailData.customer.phone}</dd></div>
                       <div><dt className="text-gray-500">Address</dt><dd className="font-medium">{detailData.customer.addressLine1}{detailData.customer.addressLine2 ? `, ${detailData.customer.addressLine2}` : ''}, {detailData.customer.city} {detailData.customer.pincode}</dd></div>
                       {detailData.customer.deliveryNotes && <div><dt className="text-gray-500">Delivery notes</dt><dd className="font-medium">{detailData.customer.deliveryNotes}</dd></div>}
-                      <div><dt className="text-gray-500">Assigned delivery person</dt><dd className="font-medium">{detailData.customer.deliveryPerson?.name ?? '—'} {detailData.customer.deliveryPerson?.zone ? `(${detailData.customer.deliveryPerson.zone})` : ''}</dd></div>
+                      <div><dt className="text-gray-500">Assigned delivery person</dt><dd className="font-medium">{detailData.customer.deliveryPerson?.name ?? '—'}</dd></div>
                     </dl>
                   </Card>
                   <Card className="p-4">
@@ -459,13 +481,29 @@ export const AdminCustomers: React.FC = () => {
                         for (let d = 1; d <= days; d++) {
                           const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                           const status = statusByDate[dateStr];
+                          const mod = detailData.calendar.modificationsByDate?.[dateStr];
+
                           let bg = 'bg-gray-100 text-gray-600';
+                          let title = `Day ${d}`;
+                          const isClickable = status === 'DELIVERED' || status === 'NOT_DELIVERED' || status === 'PAUSED';
+
                           if (status === 'DELIVERED') bg = 'bg-emerald-200 text-emerald-800';
                           else if (status === 'PAUSED') bg = 'bg-orange-200 text-orange-800';
                           else if (status === 'NOT_DELIVERED') bg = 'bg-red-200 text-red-800';
+                          else if (mod) bg = 'bg-blue-200 text-blue-800';
+
+                          if (mod) title += ` (Modified: ${mod.quantityMl}ml)`;
+                          if (isClickable) title += ' (Click to view details)';
+
                           cells.push(
-                            <div key={`d-${d}`} className={`aspect-square rounded flex items-center justify-center font-medium ${bg}`}>
+                            <div
+                              key={`d-${d}`}
+                              className={`aspect-square rounded flex items-center justify-center font-medium ${bg} relative ${isClickable ? 'cursor-pointer hover:ring-2 hover:ring-emerald-500 transition-all' : ''}`}
+                              title={title}
+                              onClick={isClickable ? () => setSelectedDeliveryDate(dateStr) : undefined}
+                            >
                               {d}
+                              {mod && <div className="absolute bottom-0.5 right-0.5 w-1 h-1 bg-blue-600 rounded-full" />}
                             </div>
                           );
                         }
@@ -498,16 +536,149 @@ export const AdminCustomers: React.FC = () => {
               >
                 <option value="">— Unassign —</option>
                 {staffList.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name} ({s.phone}) · {s.zone}</option>
+                  <option key={s.id} value={s.id}>{s.name} ({s.phone})</option>
                 ))}
               </select>
             </div>
+            {reassignPersonId && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Start delivery from</label>
+                <input
+                  type="date"
+                  value={deliveryStartDate}
+                  onChange={(e) => setDeliveryStartDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">First delivery will be scheduled on this date</p>
+              </div>
+            )}
             <div className="flex gap-2">
               <Button variant="secondary" className="flex-1" onClick={() => setReassignCustomer(null)}>
                 Cancel
               </Button>
               <Button className="flex-1" onClick={handleReassignSubmit} disabled={reassignSubmitting}>
                 {reassignSubmitting ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Delivery details modal */}
+      {selectedDeliveryDate && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setSelectedDeliveryDate(null)}
+        >
+          <Card
+            className="w-full max-w-md p-6 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Delivery Details</h2>
+              <button
+                type="button"
+                className="p-2 hover:bg-gray-100 rounded-lg"
+                onClick={() => setSelectedDeliveryDate(null)}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {deliveryDetailsLoading && (
+              <div className="flex justify-center py-12">
+                <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+
+            {!deliveryDetailsLoading && deliveryDetails && (
+              <div className="space-y-4">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                  <p className="text-sm text-emerald-700 font-medium mb-1">Date</p>
+                  <p className="text-lg font-bold text-emerald-900">
+                    {new Date(selectedDeliveryDate + 'T12:00:00').toLocaleDateString('en-IN', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric'
+                    })}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p className="text-sm text-blue-700 font-medium mb-1">Quantity</p>
+                    <p className="text-2xl font-bold text-blue-900">{deliveryDetails.liters}L</p>
+                    <p className="text-xs text-blue-600 mt-1">{deliveryDetails.quantityMl}ml</p>
+                  </div>
+
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                    <p className="text-sm text-purple-700 font-medium mb-1">Bottles</p>
+                    <p className="text-2xl font-bold text-purple-900">
+                      {deliveryDetails.largeBottles + deliveryDetails.smallBottles}
+                    </p>
+                    <p className="text-xs text-purple-600 mt-1">
+                      {deliveryDetails.largeBottles} × 1L, {deliveryDetails.smallBottles} × 500ml
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <p className="text-sm text-gray-700 font-medium mb-2">Delivered By</p>
+                  <div className="flex items-center gap-2">
+                    <User className="w-5 h-5 text-gray-400" />
+                    <p className="text-lg font-bold text-gray-900">{deliveryDetails.deliveryPersonName}</p>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <p className="text-sm text-gray-700 font-medium mb-2">Status</p>
+                  <Badge variant={
+                    deliveryDetails.status === 'DELIVERED' ? 'success' :
+                    deliveryDetails.status === 'PAUSED' ? 'warning' :
+                    'default'
+                  }>
+                    {deliveryDetails.status}
+                  </Badge>
+                </div>
+
+                {deliveryDetails.status === 'DELIVERED' && (
+                  <>
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                      <p className="text-sm text-orange-700 font-medium mb-2">Bottles Collected</p>
+                      <p className="text-lg font-bold text-orange-900">
+                        {deliveryDetails.largeBottlesCollected} × 1L, {deliveryDetails.smallBottlesCollected} × 500ml
+                      </p>
+                    </div>
+
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                      <p className="text-sm text-emerald-700 font-medium mb-2">Amount Charged</p>
+                      <p className="text-2xl font-bold text-emerald-900">₹{deliveryDetails.chargeRs}</p>
+                    </div>
+
+                    {deliveryDetails.deliveredAt && (
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <p className="text-sm text-gray-700 font-medium mb-2">Delivered At</p>
+                        <p className="text-sm text-gray-900">
+                          {formatDateLocal(deliveryDetails.deliveredAt, 'long')}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {!deliveryDetailsLoading && !deliveryDetails && (
+              <div className="py-8 text-center">
+                <p className="text-gray-500">Could not load delivery details for this date.</p>
+              </div>
+            )}
+
+            <div className="mt-6">
+              <Button variant="secondary" className="w-full" onClick={() => setSelectedDeliveryDate(null)}>
+                Close
               </Button>
             </div>
           </Card>
