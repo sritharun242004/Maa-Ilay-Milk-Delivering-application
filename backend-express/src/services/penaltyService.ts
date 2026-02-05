@@ -28,7 +28,7 @@ export async function checkAndChargePenalties(): Promise<PenaltyResult[]> {
         status: 'ACTIVE',
       },
       include: {
-        bottleLedger: {
+        BottleLedger: {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
@@ -36,7 +36,7 @@ export async function checkAndChargePenalties(): Promise<PenaltyResult[]> {
     });
 
     for (const customer of customers) {
-      const latestBalance = customer.bottleLedger[0];
+      const latestBalance = customer.BottleLedger[0];
 
       // Skip customers with no bottles out
       if (!latestBalance || (latestBalance.largeBottleBalanceAfter === 0 && latestBalance.smallBottleBalanceAfter === 0)) {
@@ -229,21 +229,36 @@ export async function getFlaggedCustomersDetailed() {
   thresholdDate.setDate(thresholdDate.getDate() - PENALTY_THRESHOLD_DAYS);
 
   // Find customers with overdue bottles
+  // FIX: Handle both issuedDate and createdAt (fallback for old records without issuedDate)
   const overdueBottles = await prisma.bottleLedger.findMany({
     where: {
       action: 'ISSUED',
-      issuedDate: {
-        lte: thresholdDate,
-      },
+      OR: [
+        {
+          issuedDate: {
+            lte: thresholdDate,
+          }
+        },
+        {
+          AND: [
+            { issuedDate: null },
+            {
+              createdAt: {
+                lte: thresholdDate,
+              }
+            }
+          ]
+        }
+      ],
       penaltyAppliedAt: null,
     },
     include: {
-      customer: {
+      Customer: {
         select: {
           id: true,
           name: true,
           phone: true,
-          deliveryPerson: {
+          DeliveryPerson: {
             select: {
               name: true,
             },
@@ -269,7 +284,9 @@ export async function getFlaggedCustomersDetailed() {
 
   for (const bottle of overdueBottles) {
     const existing = customerMap.get(bottle.customerId);
-    const daysOverdue = Math.floor((now.getTime() - new Date(bottle.issuedDate!).getTime()) / (1000 * 60 * 60 * 24));
+    // FIX: Use issuedDate if available, otherwise fall back to createdAt
+    const bottleDate = bottle.issuedDate ? new Date(bottle.issuedDate) : new Date(bottle.createdAt);
+    const daysOverdue = Math.floor((now.getTime() - bottleDate.getTime()) / (1000 * 60 * 60 * 24));
 
     if (existing) {
       if (bottle.size === 'LARGE') {
@@ -278,19 +295,19 @@ export async function getFlaggedCustomersDetailed() {
         existing.smallBottles += bottle.quantity;
       }
       existing.bottleLedgerIds.push(bottle.id);
-      if (new Date(bottle.issuedDate!) < existing.oldestBottleDate) {
-        existing.oldestBottleDate = new Date(bottle.issuedDate!);
+      if (bottleDate < existing.oldestBottleDate) {
+        existing.oldestBottleDate = bottleDate;
         existing.daysOverdue = daysOverdue;
       }
     } else {
       customerMap.set(bottle.customerId, {
         id: bottle.customerId,
-        name: bottle.customer.name,
-        phone: bottle.customer.phone,
-        deliveryPersonName: bottle.customer.deliveryPerson?.name || 'Unassigned',
+        name: bottle.Customer.name,
+        phone: bottle.Customer.phone,
+        deliveryPersonName: bottle.Customer.DeliveryPerson?.name || 'Unassigned',
         largeBottles: bottle.size === 'LARGE' ? bottle.quantity : 0,
         smallBottles: bottle.size === 'SMALL' ? bottle.quantity : 0,
-        oldestBottleDate: new Date(bottle.issuedDate!),
+        oldestBottleDate: bottleDate,
         daysOverdue,
         bottleLedgerIds: [bottle.id],
       });
@@ -318,13 +335,28 @@ export async function imposePenaltyOnCustomer(
 
   try {
     // Find customer's overdue bottles
+    // FIX: Handle both issuedDate and createdAt (fallback for old records)
     const overdueBottles = await prisma.bottleLedger.findMany({
       where: {
         customerId,
         action: 'ISSUED',
-        issuedDate: {
-          lte: thresholdDate,
-        },
+        OR: [
+          {
+            issuedDate: {
+              lte: thresholdDate,
+            }
+          },
+          {
+            AND: [
+              { issuedDate: null },
+              {
+                createdAt: {
+                  lte: thresholdDate,
+                }
+              }
+            ]
+          }
+        ],
         penaltyAppliedAt: null,
       },
     });
@@ -465,7 +497,7 @@ export async function getPenaltyStatistics() {
     select: {
       amountPaise: true,
       createdAt: true,
-      wallet: {
+      Wallet: {
         select: {
           customerId: true,
         },
@@ -486,7 +518,7 @@ export async function getPenaltyStatistics() {
       penaltyAppliedAt: null,
     },
     include: {
-      customer: {
+      Customer: {
         select: {
           id: true,
           name: true,
@@ -519,7 +551,7 @@ export async function getPenaltyStatistics() {
       id: true,
       name: true,
       phone: true,
-      bottleLedger: {
+      BottleLedger: {
         where: {
           action: 'ISSUED',
           issuedDate: {
@@ -537,9 +569,9 @@ export async function getPenaltyStatistics() {
     id: c.id,
     name: c.name,
     phone: c.phone,
-    oldestBottleDate: c.bottleLedger[0]?.issuedDate ?? null,
-    daysOverdue: c.bottleLedger[0]?.issuedDate
-      ? Math.floor((now.getTime() - new Date(c.bottleLedger[0].issuedDate).getTime()) / (1000 * 60 * 60 * 24))
+    oldestBottleDate: c.BottleLedger[0]?.issuedDate ?? null,
+    daysOverdue: c.BottleLedger[0]?.issuedDate
+      ? Math.floor((now.getTime() - new Date(c.BottleLedger[0].issuedDate).getTime()) / (1000 * 60 * 60 * 24))
       : 0,
   }));
 

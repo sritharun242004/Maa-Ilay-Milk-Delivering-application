@@ -40,7 +40,7 @@ passport.use(
               addressLine1: 'Onboarding Pending', // Will be updated during onboarding
               city: 'Pondicherry',
               pincode: '000000', // Will be updated during onboarding
-              status: 'PENDING_APPROVAL',
+              status: 'VISITOR',
             },
           });
         }

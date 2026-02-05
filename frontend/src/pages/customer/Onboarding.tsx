@@ -15,9 +15,26 @@ export const CustomerOnboarding: React.FC = () => {
     city: 'Pondicherry',
     pincode: '',
   });
+  const [csrfToken, setCsrfToken] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  // Pre-fill name from session (Google gives us name)
+  // Fetch CSRF token and pre-fill name from session
   useEffect(() => {
+    // Fetch CSRF token
+    fetch('/api/csrf-token', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.csrfToken) {
+          setCsrfToken(data.csrfToken);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch CSRF token:', err);
+        setError('Failed to initialize form. Please refresh the page.');
+      });
+
+    // Pre-fill name from session (Google gives us name)
     fetch('/api/auth/session', { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => {
@@ -25,8 +42,6 @@ export const CustomerOnboarding: React.FC = () => {
       })
       .catch(() => {});
   }, []);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -37,10 +52,20 @@ export const CustomerOnboarding: React.FC = () => {
     setLoading(true);
     setError('');
 
+    // Validate CSRF token
+    if (!csrfToken) {
+      setError('Security token missing. Please refresh the page and try again.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch('/api/customer/complete-profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken, // Include CSRF token
+        },
         credentials: 'include',
         body: JSON.stringify(formData),
       });

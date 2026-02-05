@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import 'dotenv/config'
+import { calculateDailyPricePaise } from '../src/config/pricing'
 
 const prisma = new PrismaClient()
 
@@ -47,7 +48,6 @@ async function main() {
       phone: '9876543211',
       password: vijayPasswordHash,
       name: 'Vijay',
-      zone: 'Pondicherry Central',
       isActive: true,
       createdByAdminId: admin.id,
     },
@@ -57,7 +57,6 @@ async function main() {
   console.log('  Name: Vijay')
   console.log('  Phone: 9876543211')
   console.log('  Password: ' + vijayPassword)
-  console.log('  Zone: Pondicherry Central')
 
   // Delivery person - Rajesh Kumar (Zone 1) for mock deliveries
   const rajeshPassword = await bcrypt.hash('delivery123', 12)
@@ -68,7 +67,6 @@ async function main() {
       phone: '9876543210',
       password: rajeshPassword,
       name: 'Rajesh Kumar',
-      zone: 'Zone 1',
       isActive: true,
       createdByAdminId: admin.id,
     },
@@ -144,35 +142,56 @@ async function main() {
       },
     })
 
+    const quantityMl = i % 3 === 0 ? 2000 : 1000
+    const dailyPrice = calculateDailyPricePaise(quantityMl)
+
     await prisma.subscription.upsert({
       where: { customerId: customer.id },
       update: {},
       create: {
         customerId: customer.id,
-        dailyQuantityMl: i % 3 === 0 ? 2000 : 1000,
-        dailyPricePaise: i % 3 === 0 ? 22000 : 11000,
+        dailyQuantityMl: quantityMl,
+        dailyPricePaise: dailyPrice,
         largeBotles: i % 3 === 0 ? 2 : 1,
         smallBottles: 0,
         status: 'ACTIVE',
         startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
         currentCycleStart: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-        paymentCycleCount: 1,
       },
     })
 
-    await prisma.wallet.upsert({
-      where: { customerId: customer.id },
-      update: {},
-      create: {
-        customerId: customer.id,
-        balancePaise: 15000,
-      },
+    // Create wallet and initial transaction in a single upsert
+    // First check if wallet exists
+    let wallet = await prisma.wallet.findUnique({
+      where: { customerId: customer.id }
     })
+
+    if (!wallet) {
+      // Create new wallet with initial balance
+      wallet = await prisma.wallet.create({
+        data: {
+          customerId: customer.id,
+          balancePaise: 15000,
+        },
+      })
+
+      // Create initial transaction record only for new wallets
+      await prisma.walletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          type: 'WALLET_TOPUP',
+          amountPaise: 15000,
+          balanceAfterPaise: 15000,
+          description: 'Initial seed balance',
+          referenceType: 'seed',
+          referenceId: `SEED_${customer.id}`
+        }
+      })
+    }
 
     // Today's delivery for this customer
-    const quantityMl = i % 3 === 0 ? 2000 : 1000
     const largeBottles = i % 3 === 0 ? 2 : 1
-    const chargePaise = i % 3 === 0 ? 22000 : 11000
+    const chargePaise = dailyPrice
     await prisma.delivery.upsert({
       where: {
         customerId_deliveryDate: { customerId: customer.id, deliveryDate: today },
@@ -243,7 +262,6 @@ async function main() {
       phone: '0987654321',
       password: tharunPassword,
       name: 'Tharun',
-      zone: 'Auroville',
       isActive: true,
       createdByAdminId: admin.id,
     },
@@ -277,34 +295,52 @@ async function main() {
       },
     })
 
+    const quantityMl = i % 3 === 0 ? 2000 : 1000
+    const dailyPrice = calculateDailyPricePaise(quantityMl)
+
     await prisma.subscription.upsert({
       where: { customerId: customer.id },
       update: {},
       create: {
         customerId: customer.id,
-        dailyQuantityMl: i % 3 === 0 ? 2000 : 1000,
-        dailyPricePaise: i % 3 === 0 ? 22000 : 11000,
+        dailyQuantityMl: quantityMl,
+        dailyPricePaise: dailyPrice,
         largeBotles: i % 3 === 0 ? 2 : 1,
         smallBottles: 0,
         status: 'ACTIVE',
         startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
         currentCycleStart: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-        paymentCycleCount: 1,
       },
     })
 
-    await prisma.wallet.upsert({
-      where: { customerId: customer.id },
-      update: {},
-      create: {
-        customerId: customer.id,
-        balancePaise: 15000,
-      },
+    // Create wallet and initial transaction
+    let wallet = await prisma.wallet.findUnique({
+      where: { customerId: customer.id }
     })
 
-    const quantityMl = i % 3 === 0 ? 2000 : 1000
+    if (!wallet) {
+      wallet = await prisma.wallet.create({
+        data: {
+          customerId: customer.id,
+          balancePaise: 15000,
+        },
+      })
+
+      await prisma.walletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          type: 'WALLET_TOPUP',
+          amountPaise: 15000,
+          balanceAfterPaise: 15000,
+          description: 'Initial seed balance',
+          referenceType: 'seed',
+          referenceId: `SEED_${customer.id}`
+        }
+      })
+    }
+
     const largeBottles = i % 3 === 0 ? 2 : 1
-    const chargePaise = i % 3 === 0 ? 22000 : 11000
+    const chargePaise = dailyPrice
 
     await prisma.delivery.upsert({
       where: {

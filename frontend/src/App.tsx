@@ -18,6 +18,7 @@ import { CustomerCalendar } from './pages/customer/Calendar';
 import { Wallet } from './pages/customer/Wallet';
 import { History } from './pages/customer/History';
 import { Support } from './pages/customer/Support';
+import { Profile } from './pages/customer/Profile';
 
 import { AdminDashboard } from './pages/admin/Dashboard';
 import { AdminCustomers } from './pages/admin/Customers';
@@ -90,6 +91,14 @@ function App() {
             element={
               <ProtectedRoute allowedUserType="customer">
                 <Support />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/customer/profile"
+            element={
+              <ProtectedRoute allowedUserType="customer">
+                <Profile />
               </ProtectedRoute>
             }
           />

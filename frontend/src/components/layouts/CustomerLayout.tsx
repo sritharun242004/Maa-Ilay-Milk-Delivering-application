@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   X,
+  User,
 } from 'lucide-react';
 
 interface CustomerLayoutProps {
@@ -34,6 +35,7 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
     { path: '/customer/calendar', label: 'Calendar', icon: Calendar },
     { path: '/customer/wallet', label: 'Wallet', icon: Wallet },
     { path: '/customer/history', label: 'History', icon: Clock },
+    { path: '/customer/profile', label: 'Profile', icon: User },
     { path: '/customer/support', label: 'Support', icon: HelpCircle },
   ];
 

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { clearAllCaches } from '../hooks/useCachedData';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -27,7 +28,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = () => {
     // Clear server session so cookie is invalidated
-    fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
+    fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => { });
+
+    // Clear all cached data on logout
+    clearAllCaches();
+
     setIsAuthenticated(false);
     setUserType(null);
     setUserId(null);
@@ -36,19 +41,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Restore session on app load / page reload so user stays logged in
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API_BASE}/auth/session`, { credentials: 'include' })
-      .then((res) => res.json())
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000); // 15 sec timeout
+
+    fetch(`${API_BASE}/auth/session`, {
+      credentials: 'include',
+      signal: controller.signal
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Session not active');
+        return res.json();
+      })
       .then((data) => {
         if (cancelled) return;
-        if (data.authenticated && data.user?.role && data.user?.id) {
+        if (data && data.authenticated && data.user?.role && data.user?.id) {
           login(data.user.role, data.user.id);
         }
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.warn('Session check skipped/failed:', err.message);
+      })
       .finally(() => {
+        clearTimeout(timeout);
         if (!cancelled) setSessionLoading(false);
       });
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, []);
 
   return (

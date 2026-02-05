@@ -1,6 +1,3 @@
-// Maa Ilay - Milk Delivery System Database Schema
-// Production-ready schema with append-only ledgers for audit trails
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,436 +7,331 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ==================== ENUMS ====================
-
-enum CustomerStatus {
-  PENDING_APPROVAL  // Awaiting admin approval
-  PENDING_PAYMENT   // Approved, awaiting first payment
-  ACTIVE            // Fully active subscription
-  PAUSED            // Temporarily paused by admin
-  BLOCKED           // Blocked due to non-payment
-  INACTIVE          // Subscription ended
-}
-
-enum SubscriptionStatus {
-  PENDING           // Not yet started
-  ACTIVE            // Currently active
-  PAUSED            // Paused by customer or admin
-  EXPIRED           // Subscription period ended
-  CANCELLED         // Cancelled by admin
-}
-
-enum TransactionType {
-  WALLET_TOPUP      // Razorpay payment added to wallet
-  REFERRAL_CREDIT   // Credit from a referral
-  MILK_CHARGE       // Daily milk charge deducted
-  DEPOSIT_CHARGE    // Bottle deposit charged
-  PENALTY_CHARGE    // Penalty for unreturned bottles
-  ADMIN_CREDIT      // Manual credit by admin
-  ADMIN_DEBIT       // Manual debit by admin
-  REFUND            // Refund (if any)
-}
-
-enum DeliveryStatus {
-  SCHEDULED         // Scheduled for delivery
-  DELIVERED         // Successfully delivered
-  NOT_DELIVERED     // Could not deliver (customer absent, etc.)
-  PAUSED            // Customer paused this day
-  BLOCKED           // Blocked due to insufficient balance
-  HOLIDAY           // Admin declared holiday
-}
-
-enum BottleAction {
-  ISSUED            // Bottle given to customer
-  RETURNED          // Bottle returned by customer
-  PENALTY_CHARGED   // Penalty applied for this bottle
-  BROKEN_REPORTED   // Customer reported broken (still leads to penalty)
-  ADJUSTMENT        // Admin adjustment
-}
-
-enum BottleSize {
-  LARGE             // 1 Liter bottle
-  SMALL             // 500ml bottle
-}
-
-enum PaymentStatus {
-  PENDING           // Payment initiated
-  SUCCESS           // Payment successful
-  FAILED            // Payment failed
-  REFUNDED          // Payment refunded
-}
-
-// ==================== AUTH MODELS ====================
-
-// Customer - Uses Google OAuth
-model Customer {
-  id                String           @id @default(cuid())
-  email             String           @unique
-  name              String
-  phone             String           @unique
-  profileImage      String?
-  
-  // Address details
-  addressLine1      String
-  addressLine2      String?
-  landmark          String?
-  city              String           @default("Pondicherry")
-  pincode           String
-  
-  // Status and approval
-  status            CustomerStatus   @default(PENDING_APPROVAL)
-  approvedAt        DateTime?
-  approvedBy        String?          // Admin ID who approved
-  rejectionReason   String?
-  
-  // Delivery assignment
-  deliveryPersonId  String?
-  deliveryPerson    DeliveryPerson?  @relation(fields: [deliveryPersonId], references: [id])
-  deliveryNotes     String?          // Special instructions for delivery
-  
-  // Timestamps
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  
-  // Relations
-  subscription      Subscription?
-  wallet            Wallet?
-  deliveries        Delivery[]
-  pauses            Pause[]
-  bottleLedger      BottleLedger[]
-  
-  @@index([status])
-  @@index([deliveryPersonId])
-  @@index([phone])
-}
-
-// Admin - Email/Password authentication
 model Admin {
-  id                String           @id @default(cuid())
-  email             String           @unique
-  password          String           // Hashed password
-  name              String
-  phone             String?
-  isActive          Boolean          @default(true)
-  
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  lastLoginAt       DateTime?
-  
-  // Audit trail for admin actions
-  auditLogs         AdminAuditLog[]
+  id                 String          @id @default(cuid())
+  email         String          @unique
+  password      String
+  name          String
+  phone         String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  lastLoginAt   DateTime?
+  AdminAuditLog AdminAuditLog[]
 }
 
-// Delivery Person - Phone/Password authentication (created by admin)
-model DeliveryPerson {
-  id                String           @id @default(cuid())
-  phone             String           @unique  // Used as username
-  password          String           // Hashed password
-  name              String
-  isActive          Boolean          @default(true)
+model AdminAuditLog {
+  id                 String          @id @default(cuid())
+  adminId    String
+  action     String
+  entityType String
+  entityId   String
+  oldValue   Json?
+  newValue   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  Admin      Admin    @relation(fields: [adminId], references: [id])
 
-  // Zone/Route assignment
-  zone              String?          // e.g., "Pondicherry Central", "Auroville"
-
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  lastLoginAt       DateTime?
-  createdByAdminId  String
-
-  // Relations
-  customers         Customer[]
-  deliveries        Delivery[]
-
-  @@index([phone])
-  @@index([zone])
-}
-
-// ==================== SUBSCRIPTION & WALLET ====================
-
-model Subscription {
-  id                String             @id @default(cuid())
-  customerId        String             @unique
-  customer          Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  
-  // Quantity (daily delivery amount in ml)
-  dailyQuantityMl   Int                // 500, 1000, 1500, 2000, 2500, 3000
-  
-  // Pricing (calculated based on quantity)
-  dailyPricePaise   Int                // Price in paise (110 rupees = 11000 paise for 1L)
-  
-  // Bottle composition (auto-calculated)
-  largeBotles       Int                // Number of 1L bottles
-  smallBottles      Int                // Number of 500ml bottles
-  
-  // Subscription cycle tracking
-  status            SubscriptionStatus @default(PENDING)
-  startDate         DateTime?
-  endDate           DateTime?
-  currentCycleStart DateTime?          // Start of current billing cycle
-  paymentCycleCount Int                @default(0)  // 1, 2, 3, 4... (deposit on 1, 4, 7...)
-  
-  // Pause tracking
-  pauseDaysUsedThisMonth Int           @default(0)
-  pauseMonthYear    String?            // "2026-01" format to reset monthly
-  
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  
-  @@index([status])
-  @@index([customerId])
-}
-
-model Wallet {
-  id                String              @id @default(cuid())
-  customerId        String              @unique
-  customer          Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  
-  // Balance in paise (can be negative during grace period)
-  balancePaise      Int                 @default(0)
-  
-  // Grace period tracking
-  negativeBalanceSince DateTime?        // When balance first went negative
-  
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  
-  // Append-only transaction ledger
-  transactions      WalletTransaction[]
-  
-  @@index([customerId])
-}
-
-// Append-only wallet transaction ledger
-model WalletTransaction {
-  id                String              @id @default(cuid())
-  walletId          String
-  wallet            Wallet              @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  
-  type              TransactionType
-  amountPaise       Int                 // Positive for credits, negative for debits
-  balanceAfterPaise Int                 // Balance after this transaction
-  
-  // Reference details
-  description       String
-  referenceId       String?             // Payment order ID, delivery ID, etc.
-  referenceType     String?             // "payment", "delivery", "penalty", etc.
-  
-  // For admin actions
-  performedByAdminId String?
-  
-  createdAt         DateTime            @default(now())
-  
-  @@index([walletId])
-  @@index([type])
+  @@index([adminId])
   @@index([createdAt])
+  @@index([entityType, entityId])
 }
 
-// ==================== DELIVERY ====================
-
-model Delivery {
-  id                String              @id @default(cuid())
-  customerId        String
-  customer          Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  
-  deliveryPersonId  String?
-  deliveryPerson    DeliveryPerson?     @relation(fields: [deliveryPersonId], references: [id])
-  
-  // Delivery date (date only, no time)
-  deliveryDate      DateTime            @db.Date
-  
-  // Quantity details
-  quantityMl        Int
-  largeBottles      Int                 // 1L bottles to deliver
-  smallBottles      Int                 // 500ml bottles to deliver
-  
-  // Pricing
-  chargePaise       Int                 // Amount charged for this delivery
-  depositPaise      Int                 @default(0)  // Deposit charged (if applicable)
-  
-  // Status
-  status            DeliveryStatus      @default(SCHEDULED)
-  deliveredAt       DateTime?
-  
-  // Bottle collection (filled by delivery person)
-  largeBottlesCollected Int             @default(0)
-  smallBottlesCollected Int             @default(0)
-  
-  // Notes
-  deliveryNotes     String?
-  
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  
-  @@unique([customerId, deliveryDate])
-  @@index([deliveryDate])
-  @@index([deliveryPersonId, deliveryDate])
-  @@index([status])
-}
-
-// ==================== BOTTLE TRACKING ====================
-
-// Append-only bottle ledger for complete audit trail
 model BottleLedger {
-  id                String              @id @default(cuid())
-  customerId        String
-  customer          Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  
-  action            BottleAction
-  size              BottleSize
-  quantity          Int                 // Number of bottles
-  
-  // Running balance after this action
-  largeBottleBalanceAfter Int
-  smallBottleBalanceAfter Int
-  
-  // Reference
-  deliveryId        String?
-  description       String
-  
-  // Penalty tracking
-  issuedDate        DateTime?           // When bottle was issued (for penalty calculation)
-  penaltyAppliedAt  DateTime?           // When penalty was charged
-  
-  // Admin action
-  performedByAdminId String?
+  id                 String          @id @default(cuid())
+  customerId                  String
+  action                      BottleAction
+  size                        BottleSize
+  quantity                    Int
+  largeBottleBalanceAfter     Int
+  smallBottleBalanceAfter     Int
+  deliveryId                  String?
+  description                 String
+  issuedDate                  DateTime?
+  penaltyAppliedAt            DateTime?
+  performedByAdminId          String?
   performedByDeliveryPersonId String?
-  
-  createdAt         DateTime            @default(now())
-  
-  @@index([customerId])
+  createdAt                   DateTime     @default(now())
+  Customer                    Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
   @@index([action])
   @@index([createdAt])
+  @@index([customerId])
   @@index([issuedDate])
 }
 
-// ==================== PAUSE MANAGEMENT ====================
+model Customer {
+  id                 String          @id @default(cuid())
+  email                String                 @unique
+  name                 String
+  phone                String                 @unique
+  profileImage         String?
+  addressLine1         String
+  addressLine2         String?
+  landmark             String?
+  city                 String                 @default("Pondicherry")
+  pincode              String
+  status               CustomerStatus         @default(VISITOR)
+  approvedAt           DateTime?
+  approvedBy           String?
+  rejectionReason      String?
+  deliveryPersonId     String?
+  deliveryNotes        String?
+  createdAt            DateTime               @default(now())
+  updatedAt        DateTime        @updatedAt
+  deliveryStartDate    DateTime?              @db.Date
+  BottleLedger         BottleLedger[]
+  DeliveryPerson       DeliveryPerson?        @relation(fields: [deliveryPersonId], references: [id])
+  Delivery             Delivery[]
+  DeliveryModification DeliveryModification[]
+  Pause                Pause[]
+  Subscription         Subscription?
+  Wallet               Wallet?
 
-model Pause {
-  id                String              @id @default(cuid())
-  customerId        String
-  customer          Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  
-  pauseDate         DateTime            @db.Date
-  
-  // Who created this pause
-  createdByCustomer Boolean             @default(true)
-  createdByAdminId  String?             // If admin created (e.g., holiday)
-  
-  // Reason
-  reason            String?
-  
-  createdAt         DateTime            @default(now())
-  
-  @@unique([customerId, pauseDate])
-  @@index([pauseDate])
-  @@index([customerId])
+  @@index([deliveryPersonId])
+  @@index([phone])
+  @@index([status])
 }
 
-// Bulk holiday pause (admin can pause all deliveries)
-model Holiday {
-  id                String              @id @default(cuid())
-  date              DateTime            @db.Date @unique
-  reason            String
-  createdByAdminId  String
-  createdAt         DateTime            @default(now())
-  
+model Delivery {
+  id                 String          @id @default(cuid())
+  customerId            String
+  deliveryPersonId      String?
+  deliveryDate          DateTime        @db.Date
+  quantityMl            Int
+  largeBottles          Int
+  smallBottles          Int
+  chargePaise           Int
+  depositPaise          Int             @default(0)
+  status                DeliveryStatus  @default(SCHEDULED)
+  deliveredAt           DateTime?
+  largeBottlesCollected Int             @default(0)
+  smallBottlesCollected Int             @default(0)
+  deliveryNotes         String?
+  createdAt             DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  Customer              Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  DeliveryPerson        DeliveryPerson? @relation(fields: [deliveryPersonId], references: [id])
+
+  @@unique([customerId, deliveryDate])
+  @@index([deliveryDate])
+  @@index([deliveryPersonId, deliveryDate])
+  @@index([deliveryPersonId, deliveryDate, status])
+  @@index([status])
+}
+
+model DeliveryModification {
+  id                 String          @id @default(cuid())
+  customerId   String
+  date         DateTime @db.Date
+  quantityMl   Int
+  largeBottles Int
+  smallBottles Int
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt        DateTime        @updatedAt
+  Customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, date])
+  @@index([customerId])
   @@index([date])
 }
 
-// ==================== PAYMENTS ====================
+model DeliveryPerson {
+  id                 String          @id @default(cuid())
+  phone            String     @unique
+  password         String
+  name             String
+  isActive         Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime        @updatedAt
+  lastLoginAt      DateTime?
+  createdByAdminId String
+  Customer         Customer[]
+  Delivery         Delivery[]
+
+  @@index([phone])
+}
+
+model Inventory {
+  id                 String          @id @default(cuid())
+  largeBottlesTotal         Int      @default(0)
+  smallBottlesTotal         Int      @default(0)
+  largeBottlesInCirculation Int      @default(0)
+  smallBottlesInCirculation Int      @default(0)
+  updatedAt        DateTime        @updatedAt
+  updatedByAdminId          String?
+}
+
+model InventoryLog {
+  id                 String          @id @default(cuid())
+  action             String
+  largeBottlesDelta  Int      @default(0)
+  smallBottlesDelta  Int      @default(0)
+  reason             String
+  performedByAdminId String
+  createdAt          DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Pause {
+  id                 String          @id @default(cuid())
+  customerId        String
+  pauseDate         DateTime @db.Date
+  createdByCustomer Boolean  @default(true)
+  createdByAdminId  String?
+  reason            String?
+  createdAt         DateTime @default(now())
+  Customer          Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, pauseDate])
+  @@index([customerId])
+  @@index([pauseDate])
+}
 
 model PaymentOrder {
-  id                String              @id @default(cuid())
+  id                 String          @id @default(cuid())
   customerId        String
-  
-  // Razorpay details
-  razorpayOrderId   String              @unique
+  razorpayOrderId   String        @unique
   razorpayPaymentId String?
   razorpaySignature String?
-  
-  // Amount
   amountPaise       Int
-  
-  // Purpose
-  purpose           String              // "wallet_topup", "subscription_start"
-  
-  // Status
-  status            PaymentStatus       @default(PENDING)
-  
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  purpose           String
+  status            PaymentStatus @default(PENDING)
+  createdAt         DateTime      @default(now())
+  updatedAt        DateTime        @updatedAt
   completedAt       DateTime?
-  
+
   @@index([customerId])
   @@index([razorpayOrderId])
   @@index([status])
 }
 
-// ==================== INVENTORY ====================
-
-model Inventory {
-  id                String              @id @default(cuid())
-  
-  // Current stock (updated by admin)
-  largeBottlesTotal Int                 @default(0)  // Total 1L bottles owned
-  smallBottlesTotal Int                 @default(0)  // Total 500ml bottles owned
-  
-  // Calculated fields (bottles with customers)
-  largeBottlesInCirculation Int         @default(0)
-  smallBottlesInCirculation Int         @default(0)
-  
-  updatedAt         DateTime            @updatedAt
-  updatedByAdminId  String?
+model Session {
+  id                 String          @id @default(cuid())
+  sid       String   @unique
+  data      String
+  expiresAt DateTime
 }
 
-// Inventory change log
-model InventoryLog {
-  id                String              @id @default(cuid())
-  
-  action            String              // "stock_added", "stock_removed", "adjustment"
-  largeBottlesDelta Int                 @default(0)
-  smallBottlesDelta Int                 @default(0)
-  
-  reason            String
-  performedByAdminId String
-  
-  createdAt         DateTime            @default(now())
-  
-  @@index([createdAt])
+model Subscription {
+  id                 String          @id @default(cuid())
+  customerId             String             @unique
+  dailyQuantityMl        Int
+  dailyPricePaise        Int
+  largeBotles            Int
+  smallBottles           Int
+  status                 SubscriptionStatus @default(PENDING)
+  startDate              DateTime?
+  currentCycleStart      DateTime?
+  pauseDaysUsedThisMonth Int                @default(0)
+  pauseMonthYear         String?
+  createdAt              DateTime           @default(now())
+  updatedAt        DateTime        @updatedAt
+  endDate                DateTime?
+  deliveryCount          Int                @default(0)
+  lastDepositAtDelivery  Int                @default(0)
+  lastDepositChargedAt   DateTime?
+  Customer               Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([status])
 }
-
-// ==================== ADMIN AUDIT LOG ====================
-
-model AdminAuditLog {
-  id                String              @id @default(cuid())
-  adminId           String
-  admin             Admin               @relation(fields: [adminId], references: [id])
-  
-  action            String              // "customer_approved", "wallet_edited", etc.
-  entityType        String              // "customer", "wallet", "delivery_person"
-  entityId          String
-  
-  oldValue          Json?
-  newValue          Json?
-  
-  ipAddress         String?
-  userAgent         String?
-  
-  createdAt         DateTime            @default(now())
-  
-  @@index([adminId])
-  @@index([entityType, entityId])
-  @@index([createdAt])
-}
-
-// ==================== SYSTEM CONFIG ====================
 
 model SystemConfig {
-  id                String              @id @default(cuid())
-  key               String              @unique
-  value             String
-  description       String?
-  updatedAt         DateTime            @updatedAt
-  updatedByAdminId  String?
+  id                 String          @id @default(cuid())
+  key              String   @unique
+  value            String
+  description      String?
+  updatedAt        DateTime        @updatedAt
+  updatedByAdminId String?
+}
+
+model Wallet {
+  id                 String          @id @default(cuid())
+  customerId           String              @unique
+  balancePaise         Int                 @default(0)
+  negativeBalanceSince DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt        DateTime        @updatedAt
+  Customer             Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  WalletTransaction    WalletTransaction[]
+
+  @@index([customerId])
+}
+
+model WalletTransaction {
+  id                 String          @id @default(cuid())
+  walletId           String
+  type               TransactionType
+  amountPaise        Int
+  balanceAfterPaise  Int
+  description        String
+  referenceId        String?
+  referenceType      String?
+  performedByAdminId String?
+  createdAt          DateTime        @default(now())
+  Wallet             Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([type])
+  @@index([walletId])
+}
+
+enum BottleAction {
+  ISSUED
+  RETURNED
+  PENALTY_CHARGED
+  BROKEN_REPORTED
+  ADJUSTMENT
+}
+
+enum BottleSize {
+  LARGE
+  SMALL
+}
+
+enum CustomerStatus {
+  VISITOR           // Logged in via Google but hasn't subscribed yet
+  PENDING_APPROVAL  // Subscribed, waiting for admin to assign delivery person
+  ACTIVE            // Has delivery person assigned and sufficient balance
+  INACTIVE          // Has delivery person but insufficient wallet balance
+  PAUSED            // User manually paused their subscription
+}
+
+enum DeliveryStatus {
+  SCHEDULED
+  DELIVERED
+  NOT_DELIVERED
+  PAUSED
+  BLOCKED
+  HOLIDAY
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  PAUSED
+  EXPIRED
+  CANCELLED
+}
+
+enum TransactionType {
+  WALLET_TOPUP
+  MILK_CHARGE
+  DEPOSIT_CHARGE
+  PENALTY_CHARGE
+  ADMIN_CREDIT
+  ADMIN_DEBIT
+  REFUND
+  REFERRAL_CREDIT
 }

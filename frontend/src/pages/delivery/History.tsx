@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DeliveryLayout } from '../../components/layouts/DeliveryLayout';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { formatDateLocal, getLocalTodayISO } from '../../lib/date';
+import { deliveryKeys } from '../../hooks/useDeliveryData';
+import { RefreshCw } from 'lucide-react';
 
 type DeliveryStatus = 'SCHEDULED' | 'DELIVERED' | 'NOT_DELIVERED' | 'PAUSED' | 'BLOCKED' | 'HOLIDAY';
 
@@ -56,46 +59,41 @@ function getInitialFilter(): { from: string; to: string } {
 }
 
 export const DeliveryHistory: React.FC = () => {
+  const queryClient = useQueryClient();
   const [filter, setFilterState] = useState(getInitialFilter);
   const from = filter.from;
   const to = filter.to;
   const setFrom = (v: string) => setFilterState((prev) => ({ ...prev, from: v }));
   const setTo = (v: string) => setFilterState((prev) => ({ ...prev, to: v }));
-  const [deliveries, setDeliveries] = useState<HistoryRow[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const loadHistory = React.useCallback(async () => {
-    setLoading(true);
-    try {
+  // Use React Query for automatic caching and refetching
+  const { data, isLoading: loading, refetch } = useQuery({
+    queryKey: deliveryKeys.history(from, to),
+    queryFn: async () => {
       const params = new URLSearchParams();
       params.set('from', from);
       if (to.trim()) params.set('to', to.trim());
       const res = await fetch(`/api/delivery/history?${params.toString()}`, {
         credentials: 'include',
       });
-      if (!res.ok) {
-        setDeliveries([]);
-        return;
-      }
+      if (!res.ok) throw new Error('Failed to fetch history');
       const data = await res.json();
-      setDeliveries(data.deliveries ?? []);
+
+      // Save to localStorage
       try {
         localStorage.setItem(HISTORY_FILTER_KEY, JSON.stringify({ from, to }));
       } catch {
         // ignore
       }
-    } catch {
-      setDeliveries([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [from, to]);
 
-  useEffect(() => {
-    loadHistory();
-  }, [loadHistory]);
+      return data;
+    },
+    staleTime: 0, // Always refetch for fresh data
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+  });
 
-  const handleFilter = () => loadHistory();
+  const deliveries = data?.deliveries ?? [];
 
   const handleFromChange = (v: string) => setFrom(v);
   const handleToChange = (v: string) => setTo(v);
@@ -128,10 +126,12 @@ export const DeliveryHistory: React.FC = () => {
             </div>
             <div className="self-end">
               <button
-                onClick={handleFilter}
-                className="px-6 py-2 bg-emerald-500 text-white rounded-lg font-semibold hover:bg-emerald-600"
+                onClick={() => refetch()}
+                disabled={loading}
+                className="px-6 py-2 bg-emerald-500 text-white rounded-lg font-semibold hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Filter
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                {loading ? 'Loading...' : 'Refresh'}
               </button>
             </div>
           </div>

@@ -13,8 +13,10 @@ type StaffRow = {
   phone: string;
   status: string;
   mustChangePassword?: boolean;
+  todayDeliveries: number; // FIX: Add completed deliveries count
   todayLoad: number;
   maxLoad: number;
+  customerCount: number; // Total customers assigned
 };
 
 type DeliveryTeamData = {
@@ -100,7 +102,7 @@ export const DeliveryTeam: React.FC = () => {
                   <th className="text-left py-3 px-4 text-sm font-semibold">Name</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold">Phone</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold">Status</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold">Today&apos;s Load</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold">Today&apos;s Progress</th>
                   <th className="text-center py-3 px-4 text-sm font-semibold">Actions</th>
                 </tr>
               </thead>
@@ -120,7 +122,14 @@ export const DeliveryTeam: React.FC = () => {
                       </div>
                     </td>
                     <td className="py-4 px-4">
-                      {staff.todayLoad}/{staff.maxLoad}
+                      <div className="flex flex-col gap-1">
+                        <span className="font-semibold text-emerald-600">
+                          {staff.todayDeliveries || 0} completed
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          {staff.todayLoad || 0} assigned
+                        </span>
+                      </div>
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex items-center justify-center gap-1">
@@ -527,8 +536,6 @@ function ResetPasswordModal({
     </div>
   );
 }
-
-;
 
 type InventoryData = {
   totalBottles: number;

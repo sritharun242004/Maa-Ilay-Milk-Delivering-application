@@ -2,19 +2,45 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { isAuthenticated, isDelivery } from '../middleware/auth';
 import prisma from '../config/prisma';
+import { calculateDailyPricePaise } from '../config/pricing';
+import {
+  getNowIST,
+  getStartOfDayIST,
+  getEndOfDayIST,
+  parseISTDateString,
+  toISTDateString,
+  addDaysIST,
+  getTodayRangeIST,
+  toISOTimestamp,
+  getDateRangeForDateColumn,
+  getTodayRangeForDateColumn
+} from '../utils/dateUtils';
+import { deliveryActionLimiter } from '../middleware/rateLimiter';
+import { sanitizeDeliveryData } from '../utils/sanitize';
+import { ErrorCode, createErrorResponse, getErrorMessage } from '../utils/errorCodes';
 
 const router = Router();
 
+// Simple in-memory cache for ensureTodayDeliveries to avoid running on every request
+const deliveryCache = new Map<string, Date>();
+
+function getCacheKey(deliveryPersonId: string, date: Date): string {
+  return `${deliveryPersonId}_${date.toISOString().split('T')[0]}`;
+}
+
+function isCacheValid(cacheKey: string): boolean {
+  const cachedDate = deliveryCache.get(cacheKey);
+  if (!cachedDate) return false;
+  // Cache valid for 30 seconds (short TTL to prevent repeated calls while staying fresh)
+  return Date.now() - cachedDate.getTime() < 30 * 1000;
+}
+
+// IST timezone-aware date functions for Pondicherry region
 function todayStart() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return getStartOfDayIST();
 }
 function tomorrowStart() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return getStartOfDayIST(addDaysIST(getNowIST(), 1));
 }
 
 /**
@@ -24,66 +50,102 @@ function tomorrowStart() {
  * - Are NOT paused for today
  * - Have wallet balance >= 1 day's milk charge (paid)
  * Creates SCHEDULED Delivery rows if missing; does not overwrite existing rows.
+ * OPTIMIZED: Uses cache to avoid running on every request.
  */
-export async function ensureTodayDeliveries(deliveryPersonId: string, today: Date): Promise<void> {
-  const [eligibleCustomers, existingDeliveries] = await Promise.all([
+export async function ensureTodayDeliveries(deliveryPersonId: string, start: Date, end: Date): Promise<void> {
+  // FIX: Re-enable cache with 30-second TTL to prevent repeated expensive queries
+  const cacheKey = getCacheKey(deliveryPersonId, start);
+  if (isCacheValid(cacheKey)) {
+    return; // Already processed recently, skip
+  }
+  const [eligibleCustomers, existingDeliveries, modificationsForToday] = await Promise.all([
     prisma.customer.findMany({
       where: {
         deliveryPersonId,
         status: 'ACTIVE',
-        subscription: { status: 'ACTIVE' },
-        pauses: { none: { pauseDate: today } },
+        Subscription: { status: 'ACTIVE' },
+        Pause: { none: { pauseDate: { gte: start, lte: end } } },
       },
-      include: { subscription: true, wallet: true },
+      include: { Subscription: true, Wallet: true },
     }),
     prisma.delivery.findMany({
-      where: { deliveryPersonId, deliveryDate: today },
+      where: { deliveryPersonId, deliveryDate: { gte: start, lte: end } },
       select: { customerId: true },
+    }),
+    prisma.deliveryModification.findMany({
+      where: { date: { gte: start, lte: end } },
     }),
   ]);
 
-  const existingSet = new Set(existingDeliveries.map((d) => d.customerId));
+  const existingSet = new Set(existingDeliveries.map((d: any) => d.customerId));
+  const modMap = new Map(modificationsForToday.map((m: any) => [m.customerId, m]));
+
   const newDeliveries = eligibleCustomers
     .filter((c) => {
       if (existingSet.has(c.id)) return false;
-      const sub = c.subscription;
+      const sub = c.Subscription;
       if (!sub) return false;
 
-      // Start date check
-      if (sub.startDate) {
-        const startOnly = new Date(sub.startDate);
-        startOnly.setHours(0, 0, 0, 0);
-        if (today < startOnly) return false;
+      // Check delivery start date set by admin (priority)
+      // Both dates are stored at UTC midnight, so direct comparison works
+      if (c.deliveryStartDate) {
+        const customerStartDate = new Date(c.deliveryStartDate);
+        // If customer's start date is AFTER the query date, don't create delivery
+        if (customerStartDate > start) return false;
       }
 
-      // Wallet balance check
-      const balance = c.wallet?.balancePaise ?? 0;
-      if (balance < sub.dailyPricePaise) return false;
+      // Subscription start date check
+      if (sub.startDate) {
+        const subStartDate = new Date(sub.startDate);
+        if (subStartDate > start) return false;
+      }
+
+      // Wallet balance check with grace period
+      // Business rule: Allow negative balance up to 1 day's charge (grace period)
+      const balance = c.Wallet?.balancePaise ?? 0;
+      const graceLimitPaise = -sub.dailyPricePaise;
+      if (balance < graceLimitPaise) return false; // Block if below grace limit
 
       return true;
     })
     .map((c) => {
-      const sub = c.subscription!;
-      const quantityMl = sub.dailyQuantityMl;
+      const sub = c.Subscription!;
+      const mod = modMap.get(c.id);
+
+      const quantityMl = mod ? mod.quantityMl : sub.dailyQuantityMl;
+      const largeBottles = mod ? mod.largeBottles : (sub.largeBotles ?? (quantityMl >= 1000 ? Math.floor(quantityMl / 1000) : 0));
+      const smallBottles = mod ? mod.smallBottles : (sub.smallBottles ?? (quantityMl % 1000 >= 500 ? 1 : 0));
+
+      // Calculate price using central logic
+      const chargePaise = calculateDailyPricePaise(quantityMl);
+
       return {
         customerId: c.id,
         deliveryPersonId,
-        deliveryDate: today,
+        deliveryDate: start, // Save as UTC midnight
         quantityMl,
-        largeBottles: sub.largeBotles ?? (quantityMl >= 1000 ? Math.floor(quantityMl / 1000) : 0),
-        smallBottles: sub.smallBottles ?? (quantityMl % 1000 >= 500 ? 1 : 0),
-        chargePaise: sub.dailyPricePaise,
+        largeBottles,
+        smallBottles,
+        chargePaise,
         depositPaise: 0,
         status: 'SCHEDULED' as const,
+        deliveryNotes: mod?.notes || null,
       };
     });
 
   if (newDeliveries.length > 0) {
+    // Race condition protection:
+    // - skipDuplicates: true prevents duplicate key errors
+    // - Database has unique constraint on [customerId, deliveryDate]
+    // - If concurrent requests create same delivery, DB handles it gracefully
     await prisma.delivery.createMany({
       data: newDeliveries,
       skipDuplicates: true,
     });
   }
+
+  // FIX: Re-enable cache with 30-second TTL
+  deliveryCache.set(cacheKey, new Date());
 }
 
 // Current delivery person profile
@@ -92,7 +154,7 @@ router.get('/me', isAuthenticated, isDelivery, async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     const delivery = await prisma.deliveryPerson.findUnique({
       where: { id: req.user.id },
-      select: { id: true, name: true, phone: true, zone: true },
+      select: { id: true, name: true, phone: true },
     });
     if (!delivery) return res.status(404).json({ error: 'Not found' });
     res.json({ ...delivery, mustChangePassword: false });
@@ -134,25 +196,76 @@ router.put('/me/password', isAuthenticated, isDelivery, async (req, res) => {
 router.get('/assignees', isAuthenticated, isDelivery, async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-    const customers = await prisma.customer.findMany({
-      where: { deliveryPersonId: req.user.id },
-      include: {
-        subscription: { select: { dailyQuantityMl: true } },
-      },
-      orderBy: { updatedAt: 'desc' },
+
+    // Use UTC midnight for DATE column query
+    const todayRange = getTodayRangeForDateColumn();
+
+    const [customers, todaysDeliveries, todaysPauses] = await Promise.all([
+      prisma.customer.findMany({
+        where: { deliveryPersonId: req.user.id },
+        include: {
+          Subscription: { select: { dailyQuantityMl: true, dailyPricePaise: true } },
+          Wallet: { select: { balancePaise: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+      }),
+      prisma.delivery.findMany({
+        where: {
+          deliveryPersonId: req.user.id,
+          deliveryDate: { gte: todayRange.start, lte: todayRange.end },
+        },
+        select: { customerId: true, status: true },
+      }),
+      prisma.pause.findMany({
+        where: {
+          pauseDate: { gte: todayRange.start, lte: todayRange.end },
+        },
+        select: { customerId: true },
+      }),
+    ]);
+
+    const deliveryMap = new Map(todaysDeliveries.map(d => [d.customerId, d.status]));
+    const pausedCustomerIds = new Set(todaysPauses.map(p => p.customerId));
+
+    const list = customers.map((c) => {
+      // Compute display status for delivery person view
+      let displayStatus: string;
+      if (pausedCustomerIds.has(c.id)) {
+        displayStatus = 'Paused';
+      } else if (c.status === 'PENDING_APPROVAL') {
+        displayStatus = 'Pending';
+      } else if (c.Wallet && c.Subscription) {
+        // Check if balance is sufficient (allow grace period of one day's charge)
+        const balance = c.Wallet.balancePaise;
+        const dailyCharge = c.Subscription.dailyPricePaise;
+        const gracePaise = dailyCharge; // One day grace
+        if (balance < -gracePaise) {
+          displayStatus = 'Inactive';
+        } else {
+          displayStatus = 'Active';
+        }
+      } else if (!c.Subscription) {
+        displayStatus = 'Pending';
+      } else {
+        displayStatus = c.status === 'ACTIVE' ? 'Active' : 'Inactive';
+      }
+
+      return {
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        address: `${c.addressLine1}${c.addressLine2 ? ', ' + c.addressLine2 : ''}, ${c.pincode}`,
+        plan: c.Subscription
+          ? c.Subscription.dailyQuantityMl >= 1000
+            ? `${c.Subscription.dailyQuantityMl / 1000}L`
+            : `${c.Subscription.dailyQuantityMl}ml`
+          : '—',
+        status: c.status,
+        displayStatus,
+        hasDeliveryToday: deliveryMap.has(c.id),
+        deliveryStatus: deliveryMap.get(c.id) || null,
+      };
     });
-    const list = customers.map((c) => ({
-      id: c.id,
-      name: c.name,
-      phone: c.phone,
-      address: `${c.addressLine1}${c.addressLine2 ? ', ' + c.addressLine2 : ''}, ${c.pincode}`,
-      plan: c.subscription
-        ? c.subscription.dailyQuantityMl >= 1000
-          ? `${c.subscription.dailyQuantityMl / 1000}L`
-          : `${c.subscription.dailyQuantityMl}ml`
-        : '—',
-      status: c.status,
-    }));
     res.json({ assignees: list });
   } catch (e) {
     console.error('Delivery assignees error:', e);
@@ -167,30 +280,37 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
     const dateParam = req.query.date as string | undefined;
     let start: Date;
     let end: Date;
+    let dateStr: string;
+
     if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
-      const [y, m, d] = dateParam.split('-').map(Number);
-      start = new Date(y, m - 1, d, 0, 0, 0, 0);
-      end = new Date(y, m - 1, d + 1, 0, 0, 0, 0);
+      // Use the date string directly for DATE column queries
+      dateStr = dateParam;
+      const range = getDateRangeForDateColumn(dateParam);
+      start = range.start;
+      end = range.end;
     } else {
-      start = todayStart();
-      end = tomorrowStart();
+      // Use today's date in IST
+      dateStr = toISTDateString(new Date());
+      const range = getTodayRangeForDateColumn();
+      start = range.start;
+      end = range.end;
     }
     // 1. Ensure rows exist (mostly for new subscriptions or after midnight)
-    await ensureTodayDeliveries(req.user.id, start);
+    await ensureTodayDeliveries(req.user.id, start, end);
 
     // 2. Optimized Single Query: Fetching everything in one go with DB-side filtering
     const deliveries = await prisma.delivery.findMany({
       where: {
         deliveryPersonId: req.user.id,
-        deliveryDate: { gte: start, lt: end },
-        customer: {
+        deliveryDate: { gte: start, lte: end },
+        Customer: {
           status: 'ACTIVE',
-          pauses: { none: { pauseDate: start } }, // DB-side filtering for pauses
-          subscription: { isNot: null }
+          Pause: { none: { pauseDate: { gte: start, lte: end } } },
+          Subscription: { isNot: null }
         }
       },
       include: {
-        customer: {
+        Customer: {
           select: {
             id: true,
             name: true,
@@ -198,23 +318,49 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
             addressLine1: true,
             addressLine2: true,
             landmark: true,
-            wallet: { select: { balancePaise: true } },
-            subscription: true,
+            deliveryStartDate: true, // Include for filtering
+            Wallet: { select: { balancePaise: true } },
+            Subscription: true,
           },
         },
       },
       orderBy: { deliveryDate: 'asc' },
     });
 
-    // 3. Detailed Data Fetching (Bottle Balances & Full Customer info)
-    // We need the latest bottle balance for the action page to be "pre-loaded"
-    const deliveriesWithBalances = await Promise.all(deliveries.map(async (d) => {
-      // Find latest bottle ledger for this customer
-      const lastLedger = await prisma.bottleLedger.findFirst({
-        where: { customerId: d.customerId },
-        orderBy: { createdAt: 'desc' },
-        select: { largeBottleBalanceAfter: true, smallBottleBalanceAfter: true },
-      });
+    // 3. OPTIMIZED: Fetch ALL bottle ledgers in a SINGLE query (fixes N+1 problem)
+    const customerIds = deliveries.map(d => d.customerId);
+    const [modifications, bottleLedgers] = await Promise.all([
+      prisma.deliveryModification.findMany({
+        where: { date: { gte: start, lte: end } }
+      }),
+      // Get latest ledger for each customer in ONE query (safe parameterized query)
+      customerIds.length > 0 ? prisma.$queryRaw<Array<{customerId: string, largeBottleBalanceAfter: number, smallBottleBalanceAfter: number}>>`
+        SELECT DISTINCT ON ("customerId")
+          "customerId",
+          "largeBottleBalanceAfter",
+          "smallBottleBalanceAfter"
+        FROM "BottleLedger"
+        WHERE "customerId" = ANY(${customerIds}::text[])
+        ORDER BY "customerId", "createdAt" DESC
+      ` : []
+    ]);
+
+    const modMap = new Map(modifications.map(m => [m.customerId, m]));
+    const ledgerMap = new Map(bottleLedgers.map(l => [l.customerId, l]));
+
+    // Map data without additional queries
+    const deliveriesWithBalances = deliveries.map((d: any) => {
+      // Apply modification override if exists
+      const mod = modMap.get(d.customerId);
+      if (mod && d.status === 'SCHEDULED') {
+        d.quantityMl = mod.quantityMl;
+        d.largeBottles = mod.largeBottles;
+        d.smallBottles = mod.smallBottles;
+        d.deliveryNotes = mod.notes;
+      }
+
+      // Get bottle balance from pre-fetched map
+      const lastLedger = ledgerMap.get(d.customerId);
 
       return {
         ...d,
@@ -223,44 +369,66 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
           small: lastLedger?.smallBottleBalanceAfter ?? 0,
         }
       };
-    }));
+    });
 
-    // 4. Final lightweight validation (Wallet check, and start date check)
-    // We do this in JS only for wallet balance and edge cases of start dates
-    const filteredDeliveries = deliveriesWithBalances.filter(d => {
-      const c = d.customer;
-      if (!c || !c.subscription) return false;
+    // 4. Final filter & sort (Wallet check, start date check, and status-based sorting)
+    const filteredDeliveries = deliveriesWithBalances.filter((d: any) => {
+      const c = d.Customer;
+      if (!c || !c.Subscription) return false;
+
+      // Customer deliveryStartDate check (admin-assigned start date)
+      // If deliveryStartDate is set and is AFTER today, don't show this delivery
+      if (c.deliveryStartDate) {
+        const customerStartDate = new Date(c.deliveryStartDate);
+        // Compare with the query date (start is already at UTC midnight for the target date)
+        if (customerStartDate > start) return false;
+      }
 
       // Start date check (in case subscription starts after today)
-      if (c.subscription.startDate) {
-        const subStart = new Date(c.subscription.startDate);
+      if (c.Subscription.startDate) {
+        const subStart = new Date(c.Subscription.startDate);
         subStart.setHours(0, 0, 0, 0);
         if (subStart > start) return false;
       }
 
-      // Wallet check
-      const balance = c.wallet?.balancePaise ?? 0;
-      const oneDay = c.subscription.dailyPricePaise;
-      return balance >= oneDay;
+      // If already processed (Delivered/Not Delivered), show it anyway
+      if (d.status !== 'SCHEDULED') return true;
+
+      // Wallet check ONLY for pending (SCHEDULED) deliveries
+      // Business rule: Allow negative balance up to 1 day's charge (grace period)
+      const balance = c.Wallet?.balancePaise ?? 0;
+      const graceLimitPaise = -c.Subscription.dailyPricePaise;
+      return balance >= graceLimitPaise; // Allow if at or above grace limit
     });
 
-    const completed = filteredDeliveries.filter((d) => d.status === 'DELIVERED').length;
-    const totalLiters = filteredDeliveries.reduce((s, d) => s + d.quantityMl / 1000, 0);
-    const total1LBottles = filteredDeliveries.reduce((s, d) => s + d.largeBottles, 0);
-    const total500mlBottles = filteredDeliveries.reduce((s, d) => s + d.smallBottles, 0);
-    const dateStr =
-      dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
-        ? dateParam
-        : `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+    // Sort: Pending (SCHEDULED) first, then processed ones at bottom
+    const sortedDeliveries = filteredDeliveries.sort((a: any, b: any) => {
+      if (a.status === 'SCHEDULED' && b.status !== 'SCHEDULED') return -1;
+      if (a.status !== 'SCHEDULED' && b.status === 'SCHEDULED') return 1;
+      return 0;
+    });
+
+    const completed = sortedDeliveries.filter((d: any) => d.status === 'DELIVERED').length;
+    const totalLiters = sortedDeliveries.reduce((s: any, d: any) => s + d.quantityMl / 1000, 0);
+    const total1LBottles = sortedDeliveries.reduce((s: any, d: any) => s + d.largeBottles, 0);
+    const total500mlBottles = sortedDeliveries.reduce((s: any, d: any) => s + d.smallBottles, 0);
+
+    // FIX: Transform Customer to customer for frontend compatibility
+    const normalizedDeliveries = sortedDeliveries.map((d: any) => ({
+      ...d,
+      customer: d.Customer,
+      Customer: undefined,
+    }));
+
     res.json({
       date: dateStr,
-      total: filteredDeliveries.length,
+      total: sortedDeliveries.length,
       completed,
-      pending: filteredDeliveries.length - completed,
+      pending: sortedDeliveries.length - completed,
       totalLiters: Math.round(totalLiters * 10) / 10,
       total1LBottles,
       total500mlBottles,
-      deliveries: filteredDeliveries,
+      deliveries: normalizedDeliveries,
     });
   } catch (error) {
     console.error('Delivery today error:', error);
@@ -274,18 +442,23 @@ router.get('/history', isAuthenticated, isDelivery, async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     const from = req.query.from as string | undefined;
     const to = req.query.to as string | undefined;
-    const fromDate = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const toDate = to ? new Date(to) : new Date();
-    fromDate.setHours(0, 0, 0, 0);
-    toDate.setHours(23, 59, 59, 999);
+    // Use UTC midnight dates for DATE column queries
+    // Default: last 30 days to today (in IST timezone)
+    const todayIST = toISTDateString(new Date());
+    const thirtyDaysAgoIST = toISTDateString(addDaysIST(new Date(), -30));
+
+    const fromRange = getDateRangeForDateColumn(from || thirtyDaysAgoIST);
+    const toRange = getDateRangeForDateColumn(to || todayIST);
 
     const deliveries = await prisma.delivery.findMany({
       where: {
         deliveryPersonId: req.user.id,
-        deliveryDate: { gte: fromDate, lte: toDate },
+        deliveryDate: { gte: fromRange.start, lte: toRange.end },
+        // Only show actual delivery attempts, not scheduled/paused records
+        status: { in: ['DELIVERED', 'NOT_DELIVERED'] },
       },
       include: {
-        customer: {
+        Customer: {
           select: {
             id: true,
             name: true,
@@ -298,7 +471,15 @@ router.get('/history', isAuthenticated, isDelivery, async (req, res) => {
       },
       orderBy: { deliveryDate: 'desc' },
     });
-    res.json({ deliveries });
+
+    // FIX: Transform Customer to customer for frontend compatibility
+    const normalizedDeliveries = deliveries.map((d: any) => ({
+      ...d,
+      customer: d.Customer,
+      Customer: undefined,
+    }));
+
+    res.json({ deliveries: normalizedDeliveries });
   } catch (error) {
     console.error('Delivery history error:', error);
     res.status(500).json({ error: 'Failed to load history' });
@@ -314,10 +495,11 @@ router.get('/customer/:customerId', isAuthenticated, isDelivery, async (req, res
     const dateParam = req.query.date as string | undefined;
     let targetDate: Date;
     if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
-      const [y, m, d] = dateParam.split('-').map(Number);
-      targetDate = new Date(y, m - 1, d, 0, 0, 0, 0);
+      // Use UTC midnight for DATE column queries
+      targetDate = getDateRangeForDateColumn(dateParam).start;
     } else {
-      targetDate = todayStart();
+      // Default to today's IST date at UTC midnight
+      targetDate = getTodayRangeForDateColumn().start;
     }
 
     const [customer, delivery, lastLedger] = await Promise.all([
@@ -335,7 +517,7 @@ router.get('/customer/:customerId', isAuthenticated, isDelivery, async (req, res
           landmark: true,
           deliveryNotes: true,
           status: true,
-          subscription: { select: { dailyQuantityMl: true, status: true } },
+          Subscription: { select: { dailyQuantityMl: true, status: true } },
         },
       }),
       prisma.delivery.findUnique({
@@ -352,6 +534,7 @@ router.get('/customer/:customerId', isAuthenticated, isDelivery, async (req, res
 
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
+    // FIX: Use lowercase 'customer' for frontend compatibility
     res.json({
       customer: {
         id: customer.id,
@@ -362,10 +545,10 @@ router.get('/customer/:customerId', isAuthenticated, isDelivery, async (req, res
         landmark: customer.landmark,
         deliveryNotes: customer.deliveryNotes,
         status: customer.status,
-        subscription: customer.subscription
+        subscription: customer.Subscription
           ? {
-            dailyQuantityMl: customer.subscription.dailyQuantityMl,
-            status: customer.subscription.status,
+            dailyQuantityMl: customer.Subscription.dailyQuantityMl,
+            status: customer.Subscription.status,
           }
           : null,
       },
@@ -386,7 +569,7 @@ router.get('/customer/:customerId', isAuthenticated, isDelivery, async (req, res
         large: lastLedger?.largeBottleBalanceAfter ?? 0,
         small: lastLedger?.smallBottleBalanceAfter ?? 0,
       },
-      date: `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`,
+      date: toISTDateString(targetDate),
     });
   } catch (error) {
     console.error('Delivery customer error:', error);
@@ -395,16 +578,13 @@ router.get('/customer/:customerId', isAuthenticated, isDelivery, async (req, res
 });
 
 // Mark delivery status (and optional bottle collection)
-router.patch('/:id/mark', isAuthenticated, isDelivery, async (req, res) => {
+router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     const deliveryId = req.params.id;
-    const body = req.body as {
-      status?: 'DELIVERED' | 'NOT_DELIVERED';
-      deliveryNotes?: string;
-      largeBottlesCollected?: number;
-      smallBottlesCollected?: number;
-    };
+
+    // Sanitize and validate input
+    const body = sanitizeDeliveryData(req.body);
 
     const delivery = await prisma.delivery.findFirst({
       where: {
@@ -414,15 +594,18 @@ router.patch('/:id/mark', isAuthenticated, isDelivery, async (req, res) => {
         // deliveryDate: todayStart(), 
       },
       include: {
-        customer: {
+        Customer: {
           include: {
-            wallet: true,
+            Wallet: true,
           }
         }
       }
     });
 
-    if (!delivery) return res.status(404).json({ error: 'Delivery not found' });
+    if (!delivery) return res.status(404).json(createErrorResponse(
+      ErrorCode.DELIVERY_NOT_FOUND,
+      getErrorMessage(ErrorCode.DELIVERY_NOT_FOUND)
+    ));
 
     // 1. Prepare updates for the delivery record
     const updates: any = {};
@@ -436,46 +619,173 @@ router.patch('/:id/mark', isAuthenticated, isDelivery, async (req, res) => {
 
     // 2. Business Logic: Wallet and Bottles
     const customerId = delivery.customerId;
-    const isNewDelivery = body.status === 'DELIVERED' && delivery.status !== 'DELIVERED';
+    // Charge wallet for both DELIVERED and NOT_DELIVERED (customer didn't pause)
+    const shouldChargeWallet = (body.status === 'DELIVERED' || body.status === 'NOT_DELIVERED') && delivery.status === 'SCHEDULED';
+    // Only issue bottles when actually delivered
+    const shouldIssueBottles = body.status === 'DELIVERED' && delivery.status !== 'DELIVERED';
+
+    // Fetch inventory BEFORE transaction
+    const inventory = await prisma.inventory.findFirst();
 
     await prisma.$transaction(async (tx) => {
+      // CRITICAL: Fetch bottle balance INSIDE transaction with SELECT FOR UPDATE lock
+      // This prevents race conditions when multiple deliveries are marked concurrently
+      const initialLedger = await tx.$queryRaw<Array<{largeBottleBalanceAfter: number, smallBottleBalanceAfter: number}>>`
+        SELECT "largeBottleBalanceAfter", "smallBottleBalanceAfter"
+        FROM "BottleLedger"
+        WHERE "customerId" = ${customerId}
+        ORDER BY "createdAt" DESC
+        LIMIT 1
+        FOR UPDATE
+      `;
+
+      // Track bottle balances through the transaction
+      let currentLarge = initialLedger[0]?.largeBottleBalanceAfter ?? 0;
+      let currentSmall = initialLedger[0]?.smallBottleBalanceAfter ?? 0;
       // A. Update delivery record
       await tx.delivery.update({
         where: { id: deliveryId },
         data: updates,
       });
 
-      // B. If newly delivered, deduct from wallet and issue bottles
-      if (isNewDelivery) {
+      // A2. Increment delivery count and check for bottle deposit (every 90 deliveries)
+      if (body.status === 'DELIVERED' && delivery.status !== 'DELIVERED') {
+        // FIX: Use SELECT FOR UPDATE to prevent race condition on concurrent deliveries
+        const subscription = await tx.$queryRaw<Array<{
+          id: string;
+          customerId: string;
+          dailyQuantityMl: number;
+          deliveryCount: number;
+          lastDepositAtDelivery: number;
+        }>>`
+          SELECT id, "customerId", "dailyQuantityMl", "deliveryCount", "lastDepositAtDelivery"
+          FROM "Subscription"
+          WHERE "customerId" = ${customerId}
+          FOR UPDATE
+        `.then(rows => rows[0]);
+
+        if (subscription) {
+          const newDeliveryCount = subscription.deliveryCount + 1;
+
+          // Check if deposit should be charged
+          const { shouldChargeDeposit, calculateBottleDepositPaise } = await import('../config/pricing');
+          if (shouldChargeDeposit(newDeliveryCount, subscription.lastDepositAtDelivery)) {
+            const depositAmount = calculateBottleDepositPaise(subscription.dailyQuantityMl);
+
+            // Deduct deposit from wallet
+            const wallet = delivery.Customer.Wallet;
+            if (wallet) {
+              // FIX: Check if wallet has sufficient balance before charging deposit
+              // Define minimum allowed balance (can go negative by max 3 days charge as absolute limit)
+              const dailyCharge = delivery.chargePaise || 0;
+              const absoluteMinimumBalance = -(dailyCharge * 3); // Max 3 days negative
+
+              const newBalance = wallet.balancePaise - depositAmount;
+
+              // FIX: Prevent wallet from going below absolute minimum
+              if (newBalance < absoluteMinimumBalance) {
+                const error = createErrorResponse(
+                  ErrorCode.WALLET_BELOW_MINIMUM,
+                  `Cannot charge deposit: wallet would go below minimum allowed balance.`,
+                  {
+                    current: (wallet.balancePaise / 100).toFixed(2),
+                    depositAmount: (depositAmount / 100).toFixed(2),
+                    minimumAllowed: (absoluteMinimumBalance / 100).toFixed(2),
+                    shortfall: ((absoluteMinimumBalance - newBalance) / 100).toFixed(2)
+                  }
+                );
+                throw new Error(JSON.stringify(error));
+              }
+
+              await tx.wallet.update({
+                where: { id: wallet.id },
+                data: { balancePaise: newBalance }
+              });
+
+              await tx.walletTransaction.create({
+                data: {
+                  walletId: wallet.id,
+                  type: 'DEPOSIT_CHARGE',
+                  amountPaise: -depositAmount,
+                  balanceAfterPaise: newBalance,
+                  description: `Bottle deposit charge (${newDeliveryCount} deliveries completed)`,
+                  referenceType: 'deposit',
+                  referenceId: delivery.id
+                }
+              });
+
+              // Update subscription deposit tracking
+              await tx.subscription.update({
+                where: { customerId },
+                data: {
+                  deliveryCount: newDeliveryCount,
+                  lastDepositAtDelivery: newDeliveryCount,
+                  lastDepositChargedAt: new Date()
+                }
+              });
+            }
+          } else {
+            // Just increment delivery count
+            await tx.subscription.update({
+              where: { customerId },
+              data: { deliveryCount: newDeliveryCount }
+            });
+          }
+        }
+      }
+
+      // B. Deduct from wallet (for both DELIVERED and NOT_DELIVERED)
+      if (shouldChargeWallet) {
         const charge = delivery.chargePaise || 0;
-        if (charge > 0 && delivery.customer.wallet) {
-          const newBalance = delivery.customer.wallet.balancePaise - charge;
+        if (charge > 0 && delivery.Customer.Wallet) {
+          const newBalance = delivery.Customer.Wallet.balancePaise - charge;
+
+          // FIX: Enforce maximum negative balance limit
+          // Allow grace period of 3 days worth of charges maximum
+          const absoluteMinimumBalance = -(charge * 3);
+
+          if (newBalance < absoluteMinimumBalance) {
+            const error = createErrorResponse(
+              ErrorCode.WALLET_BELOW_MINIMUM,
+              `Cannot charge delivery: wallet would exceed maximum negative balance.`,
+              {
+                current: (delivery.Customer.Wallet.balancePaise / 100).toFixed(2),
+                charge: (charge / 100).toFixed(2),
+                minimumAllowed: (absoluteMinimumBalance / 100).toFixed(2),
+                newBalance: (newBalance / 100).toFixed(2)
+              }
+            );
+            throw new Error(JSON.stringify(error));
+          }
+
           await tx.wallet.update({
-            where: { id: delivery.customer.wallet.id },
-            data: { balancePaise: newBalance }
+            where: { id: delivery.Customer.Wallet.id },
+            data: {
+              balancePaise: newBalance,
+              // FIX: Track when wallet went negative
+              negativeBalanceSince: newBalance < 0 && delivery.Customer.Wallet.balancePaise >= 0
+                ? new Date()
+                : (newBalance >= 0 ? null : delivery.Customer.Wallet.negativeBalanceSince)
+            }
           });
           await tx.walletTransaction.create({
             data: {
-              walletId: delivery.customer.wallet.id,
+              walletId: delivery.Customer.Wallet.id,
               type: 'MILK_CHARGE',
               amountPaise: -charge,
               balanceAfterPaise: newBalance,
-              description: `Milk delivery (${delivery.quantityMl}ml) on ${delivery.deliveryDate.toISOString().slice(0, 10)}`,
+              description: `Milk delivery (${delivery.quantityMl}ml) on ${toISTDateString(delivery.deliveryDate)} - ${body.status}`,
               referenceType: 'delivery',
               referenceId: delivery.id
             }
           });
         }
+      }
 
-        // Issue bottles to customer ledger
+      // C. Issue bottles to customer ledger (only when actually delivered)
+      if (shouldIssueBottles) {
         if (delivery.largeBottles > 0 || delivery.smallBottles > 0) {
-          const lastLedger = await tx.bottleLedger.findFirst({
-            where: { customerId },
-            orderBy: { createdAt: 'desc' },
-          });
-
-          let currentLarge = lastLedger?.largeBottleBalanceAfter ?? 0;
-          let currentSmall = lastLedger?.smallBottleBalanceAfter ?? 0;
+          const issueDate = new Date(); // FIX: Set issue date for penalty tracking
 
           if (delivery.largeBottles > 0) {
             currentLarge += delivery.largeBottles;
@@ -488,6 +798,7 @@ router.patch('/:id/mark', isAuthenticated, isDelivery, async (req, res) => {
                 largeBottleBalanceAfter: currentLarge,
                 smallBottleBalanceAfter: currentSmall,
                 deliveryId: delivery.id,
+                issuedDate: issueDate, // FIX: Add issued date for penalty tracking
                 description: `Delivered 1L bottles`
               }
             });
@@ -503,26 +814,52 @@ router.patch('/:id/mark', isAuthenticated, isDelivery, async (req, res) => {
                 largeBottleBalanceAfter: currentLarge,
                 smallBottleBalanceAfter: currentSmall,
                 deliveryId: delivery.id,
+                issuedDate: issueDate, // FIX: Add issued date for penalty tracking
                 description: `Delivered 500ml bottles`
               }
+            });
+          }
+
+          // Update inventory: increment inCirculation for issued bottles
+          if (inventory) {
+            await tx.inventory.update({
+              where: { id: inventory.id },
+              data: {
+                largeBottlesInCirculation: {
+                  increment: delivery.largeBottles,
+                },
+                smallBottlesInCirculation: {
+                  increment: delivery.smallBottles,
+                },
+              },
             });
           }
         }
       }
 
-      // C. Handle bottle collections (Independent of status upgrade, can happen any time)
+      // D. Handle bottle collections (Independent of status upgrade, can happen any time)
       const newLargeCollected = (body.largeBottlesCollected ?? 0) - (delivery.largeBottlesCollected || 0);
       const newSmallCollected = (body.smallBottlesCollected ?? 0) - (delivery.smallBottlesCollected || 0);
 
+      // Validation: Cannot collect more bottles than customer has
+      if (newLargeCollected > currentLarge) {
+        const error = createErrorResponse(
+          ErrorCode.BOTTLE_COLLECTION_EXCEEDS_BALANCE,
+          `Cannot collect ${newLargeCollected} large bottles. Customer only has ${currentLarge} bottles.`,
+          { requested: newLargeCollected, available: currentLarge, type: 'large' }
+        );
+        throw new Error(JSON.stringify(error));
+      }
+      if (newSmallCollected > currentSmall) {
+        const error = createErrorResponse(
+          ErrorCode.BOTTLE_COLLECTION_EXCEEDS_BALANCE,
+          `Cannot collect ${newSmallCollected} small bottles. Customer only has ${currentSmall} bottles.`,
+          { requested: newSmallCollected, available: currentSmall, type: 'small' }
+        );
+        throw new Error(JSON.stringify(error));
+      }
+
       if (newLargeCollected !== 0 || newSmallCollected !== 0) {
-        const lastLedger = await tx.bottleLedger.findFirst({
-          where: { customerId },
-          orderBy: { createdAt: 'desc' },
-        });
-
-        let currentLarge = lastLedger?.largeBottleBalanceAfter ?? 0;
-        let currentSmall = lastLedger?.smallBottleBalanceAfter ?? 0;
-
         if (newLargeCollected !== 0) {
           currentLarge -= newLargeCollected;
           await tx.bottleLedger.create({
@@ -553,7 +890,31 @@ router.patch('/:id/mark', isAuthenticated, isDelivery, async (req, res) => {
             }
           });
         }
+
+        // Update inventory: decrement inCirculation for collected bottles
+        if ((newLargeCollected > 0 || newSmallCollected > 0) && inventory) {
+          await tx.inventory.update({
+            where: { id: inventory.id },
+            data: {
+              ...(newLargeCollected > 0 && {
+                largeBottlesInCirculation: {
+                  decrement: newLargeCollected,
+                },
+              }),
+              ...(newSmallCollected > 0 && {
+                smallBottlesInCirculation: {
+                  decrement: newSmallCollected,
+                },
+              }),
+            },
+          });
+        }
       }
+
+      // Note: Bottle penalty checks moved to separate admin/cron job for performance
+    }, {
+      timeout: 10000, // 10 seconds - enough for bottle ledger operations
+      isolationLevel: 'Serializable' // Highest isolation for financial operations
     });
 
     res.json({ success: true });
@@ -571,22 +932,34 @@ router.get('/bottle-ledger', isAuthenticated, isDelivery, async (req, res) => {
       where: { deliveryPersonId: req.user.id },
       select: { id: true, name: true, phone: true },
     });
-    const summaries: { customerId: string; name: string; phone: string; largePending: number; smallPending: number }[] = [];
-    for (const c of customers) {
-      const ledgers = await prisma.bottleLedger.findMany({
-        where: { customerId: c.id },
-        orderBy: { createdAt: 'desc' },
-        take: 1,
-      });
-      const last = ledgers[0];
-      summaries.push({
+
+    // Batch fetch bottle ledgers for ALL customers in single query (fixes N+1 problem)
+    const customerIds = customers.map(c => c.id);
+    const bottleLedgers = customerIds.length > 0
+      ? await prisma.$queryRaw<Array<{customerId: string, largeBottleBalanceAfter: number, smallBottleBalanceAfter: number}>>`
+          SELECT DISTINCT ON ("customerId")
+            "customerId",
+            "largeBottleBalanceAfter",
+            "smallBottleBalanceAfter"
+          FROM "BottleLedger"
+          WHERE "customerId" = ANY(${customerIds}::text[])
+          ORDER BY "customerId", "createdAt" DESC
+        `
+      : [];
+
+    const ledgerMap = new Map(bottleLedgers.map(l => [l.customerId, l]));
+
+    const summaries = customers.map(c => {
+      const ledger = ledgerMap.get(c.id);
+      return {
         customerId: c.id,
         name: c.name,
         phone: c.phone,
-        largePending: last?.largeBottleBalanceAfter ?? 0,
-        smallPending: last?.smallBottleBalanceAfter ?? 0,
-      });
-    }
+        largePending: ledger?.largeBottleBalanceAfter ?? 0,
+        smallPending: ledger?.smallBottleBalanceAfter ?? 0,
+      };
+    });
+
     res.json({ summaries });
   } catch (error) {
     console.error('Bottle ledger error:', error);

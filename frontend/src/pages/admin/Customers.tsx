@@ -227,9 +227,18 @@ export const AdminCustomers: React.FC = () => {
   };
 
   const statusVariant = (s: string) =>
-    s === 'ACTIVE' ? 'success' : s === 'PENDING_APPROVAL' ? 'warning' : s === 'PENDING_PAYMENT' ? 'default' : 'default';
+    s === 'ACTIVE' ? 'success' :
+    s === 'PENDING_APPROVAL' ? 'warning' :
+    s === 'VISITOR' ? 'default' :
+    s === 'INACTIVE' ? 'default' :
+    s === 'PAUSED' ? 'warning' : 'default';
   const statusLabel = (s: string) =>
-    s === 'PENDING_PAYMENT' ? 'Visitor' : s === 'PENDING_APPROVAL' ? 'Pending' : s === 'ACTIVE' ? 'Active' : s.replace(/_/g, ' ');
+    s === 'VISITOR' ? 'Visitor' :
+    s === 'PENDING_APPROVAL' ? 'Pending Approval' :
+    s === 'ACTIVE' ? 'Active' :
+    s === 'INACTIVE' ? 'Inactive' :
+    s === 'PAUSED' ? 'Paused' :
+    s.replace(/_/g, ' ');
 
   return (
     <AdminLayout>
@@ -257,10 +266,11 @@ export const AdminCustomers: React.FC = () => {
               className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
             >
               <option value="all">All Status</option>
+              <option value="VISITOR">Visitor</option>
+              <option value="PENDING_APPROVAL">Pending Approval</option>
               <option value="ACTIVE">Active</option>
-              <option value="PENDING_APPROVAL">Pending</option>
-              <option value="PENDING_PAYMENT">Visitor</option>
               <option value="INACTIVE">Inactive</option>
+              <option value="PAUSED">Paused</option>
             </select>
           </div>
         </Card>

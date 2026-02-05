@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { DeliveryLayout } from '../../components/layouts/DeliveryLayout';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
-import { CheckCircle, XCircle, ArrowRight, Minus, Plus } from 'lucide-react';
+import { CheckCircle, XCircle, ArrowRight, Minus, Plus, AlertCircle } from 'lucide-react';
+import { deliveryKeys } from '../../hooks/useDeliveryData';
 
 interface CustomerData {
   id: string;
@@ -53,79 +55,85 @@ export const CustomerAction: React.FC = () => {
   const { id: customerId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const dateFromState = (location.state as { date?: string } | null)?.date;
   const selectedDate = dateFromState || toDateString(new Date());
 
-  const [data, setData] = useState<ActionPageData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
   const [largeCollected, setLargeCollected] = useState(0);
   const [smallCollected, setSmallCollected] = useState(0);
   const [deliveryStatus, setDeliveryStatus] = useState<'DELIVERED' | 'NOT_DELIVERED' | null>(null);
   const [reason, setReason] = useState('Customer not home');
   const [remarks, setRemarks] = useState('');
+  const [csrfToken, setCsrfToken] = useState<string>('');
 
+  // Fetch customer data - ALWAYS from database, no cache
+  const { data, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ['delivery-action', customerId, selectedDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/delivery/customer/${customerId}?date=${selectedDate}`, {
+        credentials: 'include'
+      });
+      if (!res.ok) throw new Error('Customer not found');
+      return res.json() as Promise<ActionPageData>;
+    },
+    staleTime: 0, // Always fetch fresh data
+    gcTime: 0, // Don't cache
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    enabled: !!customerId,
+  });
+
+  const error = queryError ? 'Customer not found' : null;
+
+  // Fetch CSRF token on mount
   useEffect(() => {
-    if (!customerId) return;
-    let cancelled = false;
-
-    // 1. Check for pre-fetched data in location state (Instant Load)
-    const preFetchedData = (location.state as any)?.preFetchedData as ActionPageData | undefined;
-    if (preFetchedData) {
-      setData(preFetchedData);
-      const dv = preFetchedData.delivery;
-      if (dv) {
-        if (dv.status === 'DELIVERED' || dv.status === 'NOT_DELIVERED') setDeliveryStatus(dv.status as any);
-        setLargeCollected(typeof dv.largeBottlesCollected === 'number' ? dv.largeBottlesCollected : 0);
-        setSmallCollected(typeof dv.smallBottlesCollected === 'number' ? dv.smallBottlesCollected : 0);
-        setRemarks(typeof dv.deliveryNotes === 'string' ? dv.deliveryNotes : '');
-      }
-      setLoading(false);
-      // We still run the fetch in background to sync (Optional: can skip if you want pure offline speed)
-    } else {
-      setLoading(true);
-    }
-
-    setError(null);
-    fetch(`/api/delivery/customer/${customerId}?date=${selectedDate}`, { credentials: 'include' })
-      .then((res) => {
-        if (!res.ok) throw new Error('Not found');
-        return res.json();
-      })
-      .then((d) => {
-        if (!cancelled) {
-          setData(d);
-          const dv = d?.delivery;
-          if (dv) {
-            if (dv.status === 'DELIVERED' || dv.status === 'NOT_DELIVERED') setDeliveryStatus(dv.status);
-            setLargeCollected(typeof dv.largeBottlesCollected === 'number' ? dv.largeBottlesCollected : 0);
-            setSmallCollected(typeof dv.smallBottlesCollected === 'number' ? dv.smallBottlesCollected : 0);
-            setRemarks(typeof dv.deliveryNotes === 'string' ? dv.deliveryNotes : '');
-          }
+    fetch('/api/csrf-token', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.csrfToken) {
+          setCsrfToken(data.csrfToken);
         }
       })
-      .catch(() => {
-        if (!cancelled && !preFetchedData) setError('Customer not found');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+      .catch((err) => {
+        console.error('Failed to fetch CSRF token:', err);
       });
-    return () => { cancelled = true; };
-  }, [customerId, selectedDate, location.state]);
+  }, []);
+
+  // Update form state when data loads from database
+  useEffect(() => {
+    if (data?.delivery) {
+      const dv = data.delivery;
+      if (dv.status === 'DELIVERED' || dv.status === 'NOT_DELIVERED') {
+        setDeliveryStatus(dv.status as any);
+      }
+      setLargeCollected(typeof dv.largeBottlesCollected === 'number' ? dv.largeBottlesCollected : 0);
+      setSmallCollected(typeof dv.smallBottlesCollected === 'number' ? dv.smallBottlesCollected : 0);
+      setRemarks(typeof dv.deliveryNotes === 'string' ? dv.deliveryNotes : '');
+    }
+  }, [data]);
 
   const handleSubmit = async () => {
     if (!data?.delivery || !deliveryStatus) {
       alert('Please select delivery status (Delivered or Not Delivered).');
       return;
     }
+
+    // Validate CSRF token
+    if (!csrfToken) {
+      alert('Security token missing. Please refresh the page and try again.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const notes = deliveryStatus === 'NOT_DELIVERED' ? `${reason}. ${remarks}`.trim() : remarks;
       const res = await fetch(`/api/delivery/${data.delivery.id}/mark`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken, // Include CSRF token
+        },
         credentials: 'include',
         body: JSON.stringify({
           status: deliveryStatus,
@@ -139,22 +147,25 @@ export const CustomerAction: React.FC = () => {
         alert(err.error || 'Failed to update delivery');
         return;
       }
-      const nextId = (location.state as any)?.nextCustomerId;
-      const remainingQueue = (location.state as any)?.remainingQueue || [];
 
-      if (nextId) {
-        // Direct jump to next customer in queue
-        navigate(`/delivery/customer/${nextId}`, {
-          state: {
-            date: selectedDate,
-            nextCustomerId: remainingQueue[0],
-            remainingQueue: remainingQueue.slice(1)
-          },
-          replace: true // Replace current history entry to keep back-button sane
+      // Clear ALL caches to force fresh data
+      queryClient.removeQueries({ queryKey: ['deliveries'] });
+      queryClient.removeQueries({ queryKey: ['delivery'] });
+      queryClient.removeQueries({ queryKey: ['delivery-action'] });
+
+      // Navigate back to today's page WITH the date
+      navigate('/delivery/today', {
+        replace: true,
+        state: { date: selectedDate, forceRefresh: Date.now() }
+      });
+
+      // Force refetch after navigation completes for the specific date
+      setTimeout(() => {
+        queryClient.refetchQueries({
+          queryKey: deliveryKeys.todayDeliveries(selectedDate),
+          type: 'active'
         });
-      } else {
-        navigate('/delivery/today');
-      }
+      }, 150);
     } catch {
       alert('Failed to update delivery');
     } finally {
@@ -197,6 +208,7 @@ export const CustomerAction: React.FC = () => {
   const { customer, delivery, bottleBalance } = data;
   const address = [customer.addressLine1, customer.addressLine2, customer.landmark].filter(Boolean).join(', ');
   const hasDelivery = !!delivery;
+  const isAlreadyCompleted = delivery && (delivery.status === 'DELIVERED' || delivery.status === 'NOT_DELIVERED');
   const planQty = delivery
     ? delivery.quantityMl
     : customer.subscription?.dailyQuantityMl ?? 0;
@@ -205,6 +217,38 @@ export const CustomerAction: React.FC = () => {
     <DeliveryLayout>
       <div className="max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold text-gray-900 mb-8">Delivery Action</h1>
+
+        {/* Already Completed Banner */}
+        {isAlreadyCompleted && (
+          <Card className="p-6 mb-8 border-2 border-blue-200 bg-blue-50">
+            <div className="flex items-start gap-4">
+              <AlertCircle className="w-6 h-6 text-blue-600 flex-shrink-0 mt-1" />
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-blue-900 mb-2">
+                  ✓ Already Marked as {delivery.status === 'DELIVERED' ? 'Delivered' : 'Not Delivered'}
+                </h3>
+                <p className="text-blue-800 mb-3">
+                  This delivery was completed on {delivery.deliveredAt ? new Date(delivery.deliveredAt).toLocaleString('en-IN') : 'N/A'}.
+                  The data below is loaded from the database.
+                </p>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="bg-white/50 p-3 rounded-lg">
+                    <p className="text-blue-600 font-medium mb-1">Bottles Collected</p>
+                    <p className="text-blue-900 font-bold">
+                      {delivery.largeBottlesCollected || 0}×1L, {delivery.smallBottlesCollected || 0}×500ml
+                    </p>
+                  </div>
+                  {delivery.deliveryNotes && (
+                    <div className="bg-white/50 p-3 rounded-lg">
+                      <p className="text-blue-600 font-medium mb-1">Remarks</p>
+                      <p className="text-blue-900">{delivery.deliveryNotes}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
 
         <Card className="p-8 mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Customer Information</h2>
@@ -351,8 +395,9 @@ export const CustomerAction: React.FC = () => {
                 icon={ArrowRight}
                 onClick={handleSubmit}
                 disabled={submitting}
+                className="flex-1"
               >
-                {submitting ? 'Saving...' : 'Submit & Next Customer'}
+                {submitting ? 'Saving...' : isAlreadyCompleted ? 'Update & Go Back' : 'Submit & Go Back'}
               </Button>
               <Button variant="secondary" onClick={() => navigate('/delivery/today')} disabled={submitting}>
                 Cancel
