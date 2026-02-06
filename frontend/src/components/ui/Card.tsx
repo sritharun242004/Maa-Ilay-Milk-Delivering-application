@@ -19,7 +19,7 @@ export const Card: React.FC<CardProps> = ({
 
   const variantClasses = {
     default: 'bg-white',
-    gradient: 'bg-gradient-to-br from-emerald-50 to-white border border-emerald-100',
+    gradient: 'bg-gradient-to-br from-cream-100 to-white border border-brown-100',
   };
 
   const hoverClass = hover ? 'hover:shadow-lg hover:-translate-y-1' : '';

@@ -58,8 +58,8 @@ export const Wallet: React.FC = () => {
       return;
     }
 
-    if (amountNum < 10) {
-      setAddMoneyError('Minimum amount is ₹10');
+    if (amountNum < 1) {
+      setAddMoneyError('Minimum amount is ₹1');
       return;
     }
 
@@ -71,31 +71,75 @@ export const Wallet: React.FC = () => {
     setSubmitting(true);
 
     try {
-      const response = await fetchWithCsrf('/api/customer/wallet/topup', {
+      // Create payment order with Cashfree
+      const response = await fetchWithCsrf('/api/payment/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amountRs: amountNum }),
+        body: JSON.stringify({ amountPaise: Math.round(amountNum * 100) }),
       });
 
-      if (response.ok) {
-        setSuccess(true);
-        setShowAddMoney(false);
-        setAmount('');
-        fetchWallet(); // Refresh wallet data
-        setTimeout(() => setSuccess(false), 3000);
-      } else {
+      if (!response.ok) {
         const data = await response.json();
         if (data.error?.includes('CSRF')) {
-          // Clear cached token and show refresh message
           clearCsrfToken();
           setAddMoneyError('Invalid CSRF token. Please refresh the page and try again.');
         } else {
-          setAddMoneyError(data.error || 'Failed to add money');
+          setAddMoneyError(data.error || 'Failed to create payment order');
         }
+        setSubmitting(false);
+        return;
       }
+
+      const data = await response.json();
+
+      console.log('Payment order response:', data);
+
+      if (!data.success || !data.paymentSessionId) {
+        console.error('Payment initiation failed:', data);
+        setAddMoneyError(data.error || 'Failed to initiate payment. Check console for details.');
+        setSubmitting(false);
+        return;
+      }
+
+      // Initialize Cashfree Checkout (v3 SDK)
+      // @ts-ignore - Cashfree SDK loaded via CDN
+      if (typeof window.Cashfree === 'undefined') {
+        setAddMoneyError('Payment gateway not loaded. Please refresh and try again.');
+        setSubmitting(false);
+        return;
+      }
+
+      console.log('Initializing Cashfree checkout');
+      console.log('Payment Session ID:', data.paymentSessionId);
+      console.log('Order ID:', data.orderId);
+
+      // @ts-ignore - Cashfree v3 SDK
+      const cashfree = window.Cashfree({
+        mode: 'sandbox' // Always sandbox for now (change to 'production' for live)
+      });
+
+      // Redirect to Cashfree payment page with order_id in return URL
+      const returnUrl = `${window.location.origin}/payment/callback?order_id=${data.orderId}`;
+      console.log('Return URL:', returnUrl);
+
+      cashfree.checkout({
+        paymentSessionId: data.paymentSessionId,
+        returnUrl: returnUrl,
+        redirectTarget: '_self' // Open in same tab
+      }).then(() => {
+        console.log('Cashfree checkout initiated successfully');
+      }).catch((error: any) => {
+        console.error('Cashfree checkout error:', error);
+        setAddMoneyError('Failed to open payment page. Please try again.');
+        setSubmitting(false);
+      });
+
+      // The user will be redirected to Cashfree payment page
+      // After payment, they'll be redirected back to /payment/callback
+
     } catch (err) {
-      setAddMoneyError('Failed to add money. Please try again.');
-    } finally {
+      console.error('Payment error:', err);
+      setAddMoneyError('Failed to initiate payment. Please try again.');
       setSubmitting(false);
     }
   };
@@ -255,21 +299,21 @@ export const Wallet: React.FC = () => {
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       placeholder="0"
-                      min="10"
+                      min="1"
                       max="100000"
                       step="1"
                       className="w-full pl-10 pr-4 py-4 text-2xl font-semibold border-2 border-gray-300 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none"
                       autoFocus
                     />
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">Minimum: ₹10 | Maximum: ₹1,00,000</p>
+                  <p className="text-xs text-gray-500 mt-2">Minimum: ₹1 | Maximum: ₹1,00,000</p>
                 </div>
 
                 {/* Quick amount buttons */}
                 <div className="mb-6">
                   <p className="text-sm text-gray-600 mb-3">Quick amounts:</p>
                   <div className="grid grid-cols-4 gap-2">
-                    {[100, 200, 500, 1000].map((amt) => (
+                    {[1, 10, 50, 100].map((amt) => (
                       <button
                         key={amt}
                         type="button"
@@ -314,7 +358,7 @@ export const Wallet: React.FC = () => {
               <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <p className="text-xs text-blue-900">
                   <Info className="w-4 h-4 inline mr-1" />
-                  In production, this will integrate with a payment gateway. Currently, money is added directly for testing.
+                  <strong>TEST MODE:</strong> No real money will be charged. Use test card 4111 1111 1111 1111 for testing.
                 </p>
               </div>
             </Card>

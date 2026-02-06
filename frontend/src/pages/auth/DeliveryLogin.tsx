@@ -39,43 +39,45 @@ export const DeliveryLogin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-white flex items-center justify-center py-12 px-4">
-      <div className="max-w-md w-full bg-white rounded-3xl p-10 shadow-2xl border border-gray-200">
+    <div className="min-h-screen bg-gradient-to-br from-brown-50 to-cream-100 flex items-center justify-center py-12 px-4">
+      <div className="max-w-md w-full bg-white rounded-3xl p-10 shadow-2xl border border-brown-200">
         <div className="flex justify-center mb-6">
-          <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl shadow-lg flex items-center justify-center">
-            <Droplet className="w-8 h-8 text-white" />
-          </div>
+          <img
+            src="/Maa Illay Remove Background (1).png"
+            alt="Maa Ilay Logo"
+            className="h-16 w-auto object-contain"
+          />
         </div>
 
-        <h1 className="text-3xl font-bold text-gray-900 text-center mb-2">Delivery Portal</h1>
-        <p className="text-center text-gray-600 mb-8">Login to manage deliveries</p>
+        <h1 className="text-3xl font-bold text-neutral-700 text-center mb-2">Delivery Portal</h1>
+        <p className="text-center text-neutral-600 mb-8">Login to manage deliveries</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">Phone Number</label>
             <input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+91 98765 43210"
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors outline-none"
+              className="w-full px-4 py-3 border-2 border-brown-300 rounded-lg focus:border-brand focus:ring-2 focus:ring-brown-200 transition-colors outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors outline-none"
+              className="w-full px-4 py-3 border-2 border-brown-300 rounded-lg focus:border-brand focus:ring-2 focus:ring-brown-200 transition-colors outline-none"
             />
           </div>
 
           <button
             type="submit"
-            className="w-full py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:scale-105 hover:shadow-xl transition-all duration-300"
+            className="w-full py-4 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl font-semibold shadow-lg hover:scale-105 hover:shadow-xl transition-all duration-300"
           >
             Login to Delivery Portal
           </button>

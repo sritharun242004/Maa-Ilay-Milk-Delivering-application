@@ -98,15 +98,26 @@ export function calculateBottleDepositPaise(quantityMl: number): number {
 
 /**
  * Check if deposit should be charged based on delivery count
- * Charge at 0 deliveries (first time) and every 90 deliveries after
+ *
+ * IMPORTANT: First deposit is charged when admin assigns delivery person (not on first delivery)
+ * After that, charge every 90 actual deliveries (at 90, 180, 270, etc.)
+ *
+ * @param deliveryCount - Current total delivery count (incremented AFTER delivery is marked)
+ * @param lastDepositAtDelivery - Delivery count when last deposit was charged
+ * @returns true if deposit should be charged now
  */
 export function shouldChargeDeposit(deliveryCount: number, lastDepositAtDelivery: number): boolean {
-  // First deposit (when delivery count is 0 and never charged before)
-  if (deliveryCount === 0 && lastDepositAtDelivery === 0) {
-    return true;
+  // First deposit is charged during admin assignment when lastDepositAtDelivery is set to 0
+  // So when deliveryCount reaches 1 (first actual delivery), we should NOT charge again
+  // Only charge on subsequent 90-delivery milestones
+
+  // Never charge on first delivery (deliveryCount === 1), as deposit already charged at assignment
+  if (deliveryCount === 1) {
+    return false;
   }
 
-  // Subsequent deposits every 90 deliveries
+  // Charge every 90 deliveries after the last deposit
+  // This will trigger at deliveryCount = 90, 180, 270, etc.
   if (deliveryCount > 0 && deliveryCount - lastDepositAtDelivery >= 90) {
     return true;
   }

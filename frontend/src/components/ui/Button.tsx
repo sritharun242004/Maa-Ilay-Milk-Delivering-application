@@ -31,9 +31,9 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   const variantClasses = {
-    primary: 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg hover:shadow-xl hover:scale-105',
-    secondary: 'bg-white border-2 border-gray-300 text-gray-700 hover:border-emerald-500 hover:text-emerald-600',
-    outline: 'bg-transparent border-2 border-emerald-500 text-emerald-600 hover:bg-emerald-50',
+    primary: 'bg-gradient-to-r from-brand to-brand-hover text-white shadow-lg hover:shadow-xl hover:scale-105',
+    secondary: 'bg-white border-2 border-brown-300 text-neutral-700 hover:border-brand hover:text-brand',
+    outline: 'bg-transparent border-2 border-brand text-brand hover:bg-brown-50',
     danger: 'bg-red-500 text-white hover:bg-red-600 shadow-lg hover:shadow-xl',
   };
 

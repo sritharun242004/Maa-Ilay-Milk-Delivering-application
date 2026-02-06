@@ -13,7 +13,7 @@ const CACHE_CONFIG = {
     DEFAULT: 5 * 60 * 1000,           // 5 minutes default
   },
   // App version for cache invalidation (increment when you want to clear all caches)
-  VERSION: '1.0.1',  // FIX: Incremented to invalidate old caches
+  VERSION: '1.0.2',  // FIX: Incremented to invalidate old delivery-team cache with wrong type
 } as const;
 
 interface CacheEntry<T> {
@@ -295,10 +295,30 @@ export function useCachedData<T>(
 }
 
 /**
+ * Delivery team response type
+ */
+interface DeliveryTeamResponse {
+  totalStaff: number;
+  activeToday: number;
+  onRouteToday: number;
+  staff: Array<{
+    id: string;
+    name: string;
+    phone: string;
+    status: string;
+    mustChangePassword: boolean;
+    customerCount: number;
+    todayDeliveries: number;
+    todayLoad: number;
+    maxLoad: number;
+  }>;
+}
+
+/**
  * Pre-configured hook for delivery team data
  */
 export function useDeliveryTeam() {
-  return useCachedData<any[]>(
+  return useCachedData<DeliveryTeamResponse>(
     'delivery-team',
     '/api/admin/delivery-team',
     { ttl: CACHE_CONFIG.TTL.DELIVERY_TEAM }

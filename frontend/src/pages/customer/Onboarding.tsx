@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Droplet, MapPin, Phone, Home, User, CheckCircle, AlertCircle } from 'lucide-react';
+import { fetchWithCsrf, clearCsrfToken } from '../../utils/csrf';
 
 export const CustomerOnboarding: React.FC = () => {
   const navigate = useNavigate();
@@ -15,26 +16,11 @@ export const CustomerOnboarding: React.FC = () => {
     city: 'Pondicherry',
     pincode: '',
   });
-  const [csrfToken, setCsrfToken] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Fetch CSRF token and pre-fill name from session
+  // Pre-fill name from session (Google gives us name)
   useEffect(() => {
-    // Fetch CSRF token
-    fetch('/api/csrf-token', { credentials: 'include' })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.csrfToken) {
-          setCsrfToken(data.csrfToken);
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to fetch CSRF token:', err);
-        setError('Failed to initialize form. Please refresh the page.');
-      });
-
-    // Pre-fill name from session (Google gives us name)
     fetch('/api/auth/session', { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => {
@@ -52,32 +38,48 @@ export const CustomerOnboarding: React.FC = () => {
     setLoading(true);
     setError('');
 
-    // Validate CSRF token
-    if (!csrfToken) {
-      setError('Security token missing. Please refresh the page and try again.');
-      setLoading(false);
-      return;
-    }
-
     try {
-      const response = await fetch('/api/customer/complete-profile', {
+      const response = await fetchWithCsrf('/api/customer/complete-profile', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': csrfToken, // Include CSRF token
         },
-        credentials: 'include',
         body: JSON.stringify(formData),
       });
 
-      if (response.ok) {
+      // Handle CSRF errors by clearing cache and retrying once
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+
+        if (response.status === 403 && data.error?.includes('CSRF')) {
+          clearCsrfToken();
+          // Retry with fresh token
+          const retryResponse = await fetchWithCsrf('/api/customer/complete-profile', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData),
+          });
+
+          if (retryResponse.ok) {
+            login('customer');
+            navigate('/customer/dashboard');
+            return;
+          } else {
+            const retryData = await retryResponse.json().catch(() => ({}));
+            setError(retryData.error || 'Failed to save profile');
+            return;
+          }
+        }
+
+        setError(data.error || 'Failed to save profile');
+      } else {
         login('customer');
         navigate('/customer/dashboard');
-      } else {
-        const data = await response.json();
-        setError(data.error || 'Failed to save profile');
       }
     } catch (err) {
+      console.error('Failed to save profile:', err);
       setError('Failed to save profile. Please try again.');
     } finally {
       setLoading(false);

@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { CheckCircle, XCircle, ArrowRight, Minus, Plus, AlertCircle } from 'lucide-react';
 import { deliveryKeys } from '../../hooks/useDeliveryData';
+import { fetchWithCsrf, clearCsrfToken } from '../../utils/csrf';
 
 interface CustomerData {
   id: string;
@@ -65,7 +66,6 @@ export const CustomerAction: React.FC = () => {
   const [deliveryStatus, setDeliveryStatus] = useState<'DELIVERED' | 'NOT_DELIVERED' | null>(null);
   const [reason, setReason] = useState('Customer not home');
   const [remarks, setRemarks] = useState('');
-  const [csrfToken, setCsrfToken] = useState<string>('');
 
   // Fetch customer data - ALWAYS from database, no cache
   const { data, isLoading: loading, error: queryError } = useQuery({
@@ -86,20 +86,6 @@ export const CustomerAction: React.FC = () => {
 
   const error = queryError ? 'Customer not found' : null;
 
-  // Fetch CSRF token on mount
-  useEffect(() => {
-    fetch('/api/csrf-token', { credentials: 'include' })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.csrfToken) {
-          setCsrfToken(data.csrfToken);
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to fetch CSRF token:', err);
-      });
-  }, []);
-
   // Update form state when data loads from database
   useEffect(() => {
     if (data?.delivery) {
@@ -119,22 +105,14 @@ export const CustomerAction: React.FC = () => {
       return;
     }
 
-    // Validate CSRF token
-    if (!csrfToken) {
-      alert('Security token missing. Please refresh the page and try again.');
-      return;
-    }
-
     setSubmitting(true);
     try {
       const notes = deliveryStatus === 'NOT_DELIVERED' ? `${reason}. ${remarks}`.trim() : remarks;
-      const res = await fetch(`/api/delivery/${data.delivery.id}/mark`, {
+      const res = await fetchWithCsrf(`/api/delivery/${data.delivery.id}/mark`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': csrfToken, // Include CSRF token
         },
-        credentials: 'include',
         body: JSON.stringify({
           status: deliveryStatus,
           deliveryNotes: notes || undefined,
@@ -142,10 +120,36 @@ export const CustomerAction: React.FC = () => {
           smallBottlesCollected: deliveryStatus === 'DELIVERED' ? smallCollected : undefined,
         }),
       });
+
+      // Handle CSRF errors by clearing cache and retrying once
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Failed to update delivery');
-        return;
+
+        if (res.status === 403 && err.error?.includes('CSRF')) {
+          clearCsrfToken();
+          // Retry with fresh token
+          const retryRes = await fetchWithCsrf(`/api/delivery/${data.delivery.id}/mark`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              status: deliveryStatus,
+              deliveryNotes: notes || undefined,
+              largeBottlesCollected: deliveryStatus === 'DELIVERED' ? largeCollected : undefined,
+              smallBottlesCollected: deliveryStatus === 'DELIVERED' ? smallCollected : undefined,
+            }),
+          });
+
+          if (!retryRes.ok) {
+            const retryErr = await retryRes.json().catch(() => ({}));
+            alert(retryErr.error || 'Failed to update delivery');
+            return;
+          }
+        } else {
+          alert(err.error || 'Failed to update delivery');
+          return;
+        }
       }
 
       // Clear ALL caches to force fresh data
@@ -166,7 +170,8 @@ export const CustomerAction: React.FC = () => {
           type: 'active'
         });
       }, 150);
-    } catch {
+    } catch (error) {
+      console.error('Failed to update delivery:', error);
       alert('Failed to update delivery');
     } finally {
       setSubmitting(false);

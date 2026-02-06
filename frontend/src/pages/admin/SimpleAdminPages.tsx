@@ -12,7 +12,7 @@ type StaffRow = {
   name: string;
   phone: string;
   status: string;
-  mustChangePassword?: boolean;
+  mustChangePassword: boolean;
   todayDeliveries: number; // FIX: Add completed deliveries count
   todayLoad: number;
   maxLoad: number;
@@ -22,6 +22,7 @@ type StaffRow = {
 type DeliveryTeamData = {
   totalStaff: number;
   activeToday: number;
+  onRouteToday: number;
   staff: StaffRow[];
 };
 
@@ -29,6 +30,9 @@ type DeliveryTeamData = {
 export const DeliveryTeam: React.FC = () => {
   // Use cached data hook with 1-hour TTL
   const { data, loading, error, refetch: fetchTeam } = useDeliveryTeam();
+
+  // Debug logging
+  console.log('[DeliveryTeam] State:', { data, loading, error });
 
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -47,7 +51,7 @@ export const DeliveryTeam: React.FC = () => {
     setResetOpen(true);
   };
 
-  if (loading && !data) {
+  if (loading) {
     return (
       <AdminLayout>
         <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[40vh]">
@@ -56,14 +60,27 @@ export const DeliveryTeam: React.FC = () => {
       </AdminLayout>
     );
   }
-  if (error && !data) {
+  if (error) {
     return (
       <AdminLayout>
-        <div className="max-w-7xl mx-auto py-12 text-center text-red-600">{error}</div>
+        <div className="max-w-7xl mx-auto py-12 text-center">
+          <p className="text-red-600 mb-4">{error}</p>
+          <Button onClick={() => fetchTeam()}>Try Again</Button>
+        </div>
       </AdminLayout>
     );
   }
-  const d = data!;
+  if (!data) {
+    return (
+      <AdminLayout>
+        <div className="max-w-7xl mx-auto py-12 text-center">
+          <p className="text-gray-600 mb-4">No data available</p>
+          <Button onClick={() => fetchTeam()}>Retry</Button>
+        </div>
+      </AdminLayout>
+    );
+  }
+  const d = data;
   return (
     <AdminLayout>
       <div className="max-w-7xl mx-auto">

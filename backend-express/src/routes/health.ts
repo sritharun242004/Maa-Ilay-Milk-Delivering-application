@@ -3,6 +3,7 @@ import prisma from '../config/prisma';
 import { HEALTH } from '../config/constants';
 import os from 'os';
 import { execSync } from 'child_process';
+import axios from 'axios';
 
 const router = Router();
 
@@ -21,6 +22,7 @@ interface HealthCheckResponse {
     database?: { status: HealthStatus; responseTime?: number; error?: string };
     memory?: { status: HealthStatus; usagePercent?: number; free?: string; total?: string };
     disk?: { status: HealthStatus; freeSpace?: string; error?: string };
+    cashfree?: { status: HealthStatus; responseTime?: number; error?: string };
   };
 }
 
@@ -94,6 +96,62 @@ function checkDisk(): { status: HealthStatus; freeSpace?: string; error?: string
 }
 
 /**
+ * Check Cashfree API availability
+ * Only runs if Cashfree credentials are configured
+ */
+async function checkCashfree(): Promise<{ status: HealthStatus; responseTime?: number; error?: string }> {
+  try {
+    // Skip check if Cashfree is not configured (optional service)
+    if (!process.env.CASHFREE_APP_ID || !process.env.CASHFREE_SECRET_KEY) {
+      return {
+        status: 'ok',
+        error: 'Cashfree not configured (optional)',
+      };
+    }
+
+    const baseUrl = process.env.CASHFREE_ENVIRONMENT === 'PRODUCTION'
+      ? 'https://api.cashfree.com/pg'
+      : 'https://sandbox.cashfree.com/pg';
+
+    const start = Date.now();
+
+    // Make a lightweight API call to check connectivity
+    // Using /orders endpoint with minimal data
+    const response = await axios.get(`${baseUrl}/orders`, {
+      headers: {
+        'x-api-version': '2023-08-01',
+        'x-client-id': process.env.CASHFREE_APP_ID,
+        'x-client-secret': process.env.CASHFREE_SECRET_KEY,
+      },
+      timeout: 5000, // 5 second timeout
+    });
+
+    const responseTime = Date.now() - start;
+
+    // If we get any response from Cashfree, consider it healthy
+    return {
+      status: responseTime < 3000 ? 'ok' : 'degraded', // Warn if response > 3s
+      responseTime,
+    };
+  } catch (error: any) {
+    // Cashfree might return 400/401 errors on invalid requests
+    // But if we got a response, the API is reachable
+    if (error.response && error.response.status) {
+      return {
+        status: 'ok', // API is reachable
+        error: `API responded with ${error.response.status}`,
+      };
+    }
+
+    // Network error or timeout - API is down
+    return {
+      status: 'down',
+      error: error.message || 'Cashfree API unreachable',
+    };
+  }
+}
+
+/**
  * Calculate overall status from individual checks
  */
 function calculateOverallStatus(checks: HealthCheckResponse['checks']): HealthStatus {
@@ -133,6 +191,7 @@ router.get('/ready', async (req: Request, res: Response) => {
   const checks = {
     database: await checkDatabase(),
     memory: checkMemory(),
+    cashfree: await checkCashfree(), // Check payment gateway availability
   };
 
   const status = calculateOverallStatus(checks);
@@ -227,6 +286,7 @@ router.get('/detailed', async (req: Request, res: Response) => {
     database: await checkDatabase(),
     memory: checkMemory(),
     disk: checkDisk(),
+    cashfree: await checkCashfree(),
   };
 
   const status = calculateOverallStatus(checks);

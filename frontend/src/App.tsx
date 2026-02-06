@@ -16,6 +16,7 @@ import { CustomerOnboarding } from './pages/customer/Onboarding';
 import { Subscription } from './pages/customer/Subscription';
 import { CustomerCalendar } from './pages/customer/Calendar';
 import { Wallet } from './pages/customer/Wallet';
+import { PaymentCallback } from './pages/customer/PaymentCallback';
 import { History } from './pages/customer/History';
 import { Support } from './pages/customer/Support';
 import { Profile } from './pages/customer/Profile';
@@ -75,6 +76,14 @@ function App() {
             element={
               <ProtectedRoute allowedUserType="customer">
                 <Wallet />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/payment/callback"
+            element={
+              <ProtectedRoute allowedUserType="customer">
+                <PaymentCallback />
               </ProtectedRoute>
             }
           />

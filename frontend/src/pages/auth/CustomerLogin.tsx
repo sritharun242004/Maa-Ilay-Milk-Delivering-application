@@ -19,20 +19,22 @@ export const CustomerLogin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-white flex items-center justify-center py-12 px-4">
-      <div className="max-w-md w-full bg-white rounded-3xl p-10 shadow-2xl border border-gray-200">
+    <div className="min-h-screen bg-gradient-to-br from-brown-50 to-cream-100 flex items-center justify-center py-12 px-4">
+      <div className="max-w-md w-full bg-white rounded-3xl p-10 shadow-2xl border border-brown-200">
         <div className="flex justify-center mb-6">
-          <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl shadow-lg flex items-center justify-center">
-            <Droplet className="w-8 h-8 text-white" />
-          </div>
+          <img
+            src="/Maa Illay Remove Background (1).png"
+            alt="Maa Ilay Logo"
+            className="h-16 w-auto object-contain"
+          />
         </div>
 
-        <h1 className="text-3xl font-bold text-gray-900 text-center mb-2">Welcome to Maa Ilay</h1>
-        <p className="text-center text-gray-600 mb-8">Login to manage your milk subscription</p>
+        <h1 className="text-3xl font-bold text-neutral-700 text-center mb-2">Welcome to Maa Ilay</h1>
+        <p className="text-center text-neutral-600 mb-8">Login to manage your milk subscription</p>
 
         <button
           onClick={() => handleLogin('google')}
-          className="w-full bg-white border-2 border-gray-300 py-4 rounded-xl font-semibold flex items-center justify-center gap-3 hover:border-emerald-500 hover:shadow-lg transition-all duration-300 mb-4"
+          className="w-full bg-white border-2 border-brown-300 py-4 rounded-xl font-semibold flex items-center justify-center gap-3 hover:border-brand hover:shadow-lg transition-all duration-300 mb-4"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
@@ -56,24 +58,24 @@ export const CustomerLogin: React.FC = () => {
         </button>
 
         <div className="flex items-center gap-4 my-6">
-          <div className="flex-1 h-px bg-gray-300"></div>
-          <span className="text-sm text-gray-500">OR</span>
-          <div className="flex-1 h-px bg-gray-300"></div>
+          <div className="flex-1 h-px bg-brown-200"></div>
+          <span className="text-sm text-neutral-500">OR</span>
+          <div className="flex-1 h-px bg-brown-200"></div>
         </div>
 
         <button
           onClick={() => handleLogin('email')}
-          className="w-full bg-white border-2 border-gray-300 py-4 rounded-xl font-semibold flex items-center justify-center gap-3 hover:border-emerald-500 hover:shadow-lg transition-all duration-300"
+          className="w-full bg-white border-2 border-brown-300 py-4 rounded-xl font-semibold flex items-center justify-center gap-3 hover:border-brand hover:shadow-lg transition-all duration-300"
         >
-          <Mail className="w-5 h-5 text-emerald-600" />
+          <Mail className="w-5 h-5 text-brand" />
           Login with Email
         </button>
 
-        <p className="text-center text-sm text-gray-600 mt-6">
+        <p className="text-center text-sm text-neutral-600 mt-6">
           New user?{' '}
           <button
             onClick={() => handleLogin('register')}
-            className="text-emerald-600 font-semibold hover:text-emerald-700"
+            className="text-brand font-semibold hover:text-brand-hover"
           >
             Register here
           </button>

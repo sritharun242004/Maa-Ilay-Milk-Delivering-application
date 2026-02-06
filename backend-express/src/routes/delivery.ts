@@ -676,9 +676,9 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
             const wallet = delivery.Customer.Wallet;
             if (wallet) {
               // FIX: Check if wallet has sufficient balance before charging deposit
-              // Define minimum allowed balance (can go negative by max 3 days charge as absolute limit)
+              // Define minimum allowed balance (can go negative by max 1 day charge - grace period)
               const dailyCharge = delivery.chargePaise || 0;
-              const absoluteMinimumBalance = -(dailyCharge * 3); // Max 3 days negative
+              const absoluteMinimumBalance = -(dailyCharge * 1); // Max 1 day negative (grace period)
 
               const newBalance = wallet.balancePaise - depositAmount;
 
@@ -686,7 +686,7 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
               if (newBalance < absoluteMinimumBalance) {
                 const error = createErrorResponse(
                   ErrorCode.WALLET_BELOW_MINIMUM,
-                  `Cannot charge deposit: wallet would go below minimum allowed balance.`,
+                  `Cannot charge deposit: wallet would go below minimum allowed balance. Please top up your wallet.`,
                   {
                     current: (wallet.balancePaise / 100).toFixed(2),
                     depositAmount: (depositAmount / 100).toFixed(2),
@@ -741,13 +741,13 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
           const newBalance = delivery.Customer.Wallet.balancePaise - charge;
 
           // FIX: Enforce maximum negative balance limit
-          // Allow grace period of 3 days worth of charges maximum
-          const absoluteMinimumBalance = -(charge * 3);
+          // Allow grace period of 1 day worth of charge maximum
+          const absoluteMinimumBalance = -(charge * 1); // Grace period: 1 day only
 
           if (newBalance < absoluteMinimumBalance) {
             const error = createErrorResponse(
               ErrorCode.WALLET_BELOW_MINIMUM,
-              `Cannot charge delivery: wallet would exceed maximum negative balance.`,
+              `Cannot charge delivery: wallet would exceed maximum negative balance. Customer needs to top up.`,
               {
                 current: (delivery.Customer.Wallet.balancePaise / 100).toFixed(2),
                 charge: (charge / 100).toFixed(2),

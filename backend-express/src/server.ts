@@ -12,6 +12,7 @@ import customerRoutes from './routes/customer';
 import deliveryRoutes from './routes/delivery';
 import adminRoutes from './routes/admin';
 import healthRoutes from './routes/health';
+import paymentRoutes from './routes/payment';
 import {
   apiLimiter,
   authLimiter,
@@ -99,8 +100,15 @@ app.use(helmet({
 }));
 
 // CORS - Allow frontend to make requests
+// SECURITY: In production, FRONTEND_URL must be set explicitly (no fallback to localhost)
+const frontendUrl = process.env.FRONTEND_URL;
+if (!frontendUrl && process.env.NODE_ENV === 'production') {
+  console.error('✗ FRONTEND_URL must be set in production environment');
+  process.exit(1);
+}
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: frontendUrl || 'http://localhost:5173', // Fallback only in development
   credentials: true, // Important: allows cookies/sessions
 }));
 
@@ -128,9 +136,17 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 // Session configuration
+// SECURITY: Session secret is validated during environment validation
+// If we reach here, SESSION_SECRET is guaranteed to be set and meet length requirements
+const sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret) {
+  console.error('✗ SESSION_SECRET is not set. This should have been caught by environment validation.');
+  process.exit(1);
+}
+
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
+    secret: sessionSecret, // No fallback - must be explicitly set
     resave: false,
     saveUninitialized: false,
     store: new PrismaSessionStore(
@@ -185,6 +201,14 @@ app.use('/api/customer', (req, res, next) => {
   }
   return csrfProtection(req, res, next);
 }, customerRoutes);
+
+// Payment routes - Webhook endpoint needs to skip CSRF
+app.use('/api/payment', (req, res, next) => {
+  if (req.path === '/webhook' && req.method === 'POST') {
+    return next(); // Skip CSRF for Cashfree webhook
+  }
+  return csrfProtection(req, res, next);
+}, paymentRoutes);
 
 // Delivery person routes with CSRF protection
 app.use('/api/delivery', csrfProtection, deliveryRoutes);

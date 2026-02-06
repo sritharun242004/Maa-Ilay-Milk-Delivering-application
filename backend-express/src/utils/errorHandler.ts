@@ -176,6 +176,13 @@ export function validationError(res: Response, errors: Array<{ field: string; me
 /**
  * Business logic error helper
  */
-export function businessLogicError(res: Response, message: string, code: string, details?: any) {
-  sendError(res, 400, message, code, details);
+export function businessLogicError(res: Response, message: string, code: string, details?: any, req?: Request) {
+  sendError(res, 400, message, code, details, req);
+}
+
+/**
+ * Extract request ID from request for logging and error responses
+ */
+export function getRequestId(req: Request): string | undefined {
+  return (req as any).requestId;
 }

@@ -9,6 +9,13 @@ import { sanitizeName, sanitizePhone } from '../utils/sanitize';
 import { PAGINATION, VALIDATION } from '../config/constants';
 import { toISTDateString, getDateRangeForDateColumn, addDaysIST } from '../utils/dateUtils';
 import { ErrorCode, createErrorResponse, getErrorMessage } from '../utils/errorCodes';
+import {
+  logCustomerAssignment,
+  logDeliveryPersonCreated,
+  logDeliveryPersonUpdated,
+  logPasswordReset,
+  logPenaltyImposed,
+} from '../utils/auditLog';
 
 const router = Router();
 
@@ -620,6 +627,17 @@ router.patch('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
 
     if (Object.keys(data).length === 0) return res.status(400).json({ error: 'No updates provided' });
 
+    // Log the assignment/unassignment action
+    if (deliveryPersonId !== undefined && req.user) {
+      await logCustomerAssignment(
+        req.user.id,
+        id,
+        existing.deliveryPersonId,
+        data.deliveryPersonId || null,
+        req
+      );
+    }
+
     const customer = await prisma.customer.update({
       where: { id },
       data,
@@ -840,6 +858,10 @@ router.post('/delivery-team', isAuthenticated, isAdmin, async (req, res) => {
       },
       select: { id: true, name: true, phone: true, isActive: true },
     });
+
+    // Audit log
+    await logDeliveryPersonCreated(adminId, person.id, { name, phone, isActive: true }, req);
+
     res.status(201).json({ success: true, DeliveryPerson: person });
   } catch (e) {
     console.error('Admin create delivery person error:', e);
@@ -875,6 +897,18 @@ router.patch('/delivery-team/:id', isAuthenticated, isAdmin, async (req, res) =>
       data,
       select: { id: true, name: true, phone: true, isActive: true },
     });
+
+    // Audit log
+    if (req.user) {
+      await logDeliveryPersonUpdated(
+        req.user.id,
+        id,
+        { name: existing.name, phone: existing.phone, isActive: existing.isActive },
+        data,
+        req
+      );
+    }
+
     res.json({ success: true, DeliveryPerson: person });
   } catch (e) {
     console.error('Admin update delivery person error:', e);
@@ -900,6 +934,11 @@ router.post('/delivery-team/:id/reset-password', passwordResetLimiter, isAuthent
       where: { id },
       data: { password: hashedPassword },
     });
+
+    // Audit log
+    if (req.user) {
+      await logPasswordReset(req.user.id, id, req);
+    }
 
     // SECURITY: Never return plain-text password in API response
     // Admin should communicate password via secure channel (SMS/email)
@@ -1077,7 +1116,19 @@ router.post('/penalties/impose', isAuthenticated, isAdmin, async (req, res) => {
     const { imposePenaltyOnCustomer } = await import('../services/penaltyService');
     const result = await imposePenaltyOnCustomer(customerId, largeBottlePricePaise, smallBottlePricePaise);
 
-    if (result.success) {
+    if (result.success && req.user) {
+      // Audit log
+      await logPenaltyImposed(
+        req.user.id,
+        customerId,
+        {
+          largeBottlePriceRs,
+          smallBottlePriceRs,
+          totalChargedRs: result.totalCharged,
+        },
+        req
+      );
+
       res.json({
         success: true,
         message: result.message,

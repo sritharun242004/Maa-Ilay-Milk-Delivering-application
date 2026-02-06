@@ -192,20 +192,22 @@ model Pause {
 }
 
 model PaymentOrder {
-  id                 String          @id @default(cuid())
+  id                String          @id @default(cuid())
   customerId        String
-  razorpayOrderId   String        @unique
-  razorpayPaymentId String?
-  razorpaySignature String?
+  paymentGateway    String        @default("CASHFREE") // CASHFREE or RAZORPAY
+  gatewayOrderId    String        @unique // Cashfree order_id or Razorpay order_id
+  gatewayPaymentId  String?       // Payment ID from gateway
+  gatewaySignature  String?       // Signature for verification
   amountPaise       Int
   purpose           String
   status            PaymentStatus @default(PENDING)
+  metadata          Json?         // Additional gateway-specific data
   createdAt         DateTime      @default(now())
   updatedAt        DateTime        @updatedAt
   completedAt       DateTime?
 
   @@index([customerId])
-  @@index([razorpayOrderId])
+  @@index([gatewayOrderId])
   @@index([status])
 }
 
