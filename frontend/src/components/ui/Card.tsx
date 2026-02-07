@@ -1,6 +1,6 @@
 import React from 'react';
 
-interface CardProps {
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   className?: string;
   variant?: 'default' | 'gradient';
@@ -12,6 +12,7 @@ export const Card: React.FC<CardProps> = ({
   className = '',
   variant = 'default',
   hover = false,
+  ...props
 }) => {
   const baseClasses = 'rounded-2xl shadow-md transition-all duration-300';
 
@@ -23,7 +24,7 @@ export const Card: React.FC<CardProps> = ({
   const hoverClass = hover ? 'hover:shadow-lg hover:-translate-y-1' : '';
 
   return (
-    <div className={`${baseClasses} ${variantClasses[variant]} ${hoverClass} ${className}`}>
+    <div className={`${baseClasses} ${variantClasses[variant]} ${hoverClass} ${className}`} {...props}>
       {children}
     </div>
   );

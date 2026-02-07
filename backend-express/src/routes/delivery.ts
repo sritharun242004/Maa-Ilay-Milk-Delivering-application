@@ -26,6 +26,7 @@ function tomorrowStart() {
  * Creates SCHEDULED Delivery rows if missing; does not overwrite existing rows.
  */
 export async function ensureTodayDeliveries(deliveryPersonId: string, today: Date): Promise<void> {
+  // 1. Get all active customers for this delivery person
   const customers = await prisma.customer.findMany({
     where: {
       deliveryPersonId,
@@ -37,25 +38,56 @@ export async function ensureTodayDeliveries(deliveryPersonId: string, today: Dat
     include: {
       subscription: true,
       wallet: true,
-      pauses: {
-        where: {
-          pauseDate: today,
-        },
-      },
     },
   });
 
-  for (const c of customers) {
+  if (customers.length === 0) return;
+
+  // 2. Get existing deliveries for today to identify who is missing
+  const existingDeliveries = await prisma.delivery.findMany({
+    where: {
+      deliveryPersonId,
+      deliveryDate: today,
+    },
+    select: { customerId: true },
+  });
+
+  const existingCustomerIds = new Set(existingDeliveries.map((d) => d.customerId));
+
+  // 3. Batched check for pauses (only for customers who need a delivery created)
+  // We only care about customers who are NOT in existingCustomerIds
+  const candidateCustomers = customers.filter(c => !existingCustomerIds.has(c.id));
+  if (candidateCustomers.length === 0) return;
+
+  const candidateIds = candidateCustomers.map(c => c.id);
+
+  const activePauses = await prisma.pause.findMany({
+    where: {
+      customerId: { in: candidateIds },
+      pauseDate: today,
+    },
+    select: { customerId: true },
+  });
+
+  const pausedCustomerIds = new Set(activePauses.map((p) => p.customerId));
+
+  // 4. Prepare data for createMany
+  const toCreate = [];
+
+  for (const c of candidateCustomers) {
     // Skip if paused for today
-    if (c.pauses.length > 0) continue;
+    if (pausedCustomerIds.has(c.id)) continue;
+
     const sub = c.subscription;
     if (!sub) continue;
-    // Only include from subscription start date: e.g. plan 1 Feb–1 Mar → show in Today's Deliveries from 1 Feb onward
+
+    // Only include from subscription start date
     if (sub.startDate) {
       const startDateOnly = new Date(sub.startDate);
       startDateOnly.setHours(0, 0, 0, 0);
-      if (today < startDateOnly) continue; // subscription not yet started for this date
+      if (today < startDateOnly) continue;
     }
+
     // Skip if not paid: balance less than 1 day's charge
     const balancePaise = c.wallet?.balancePaise ?? 0;
     if (balancePaise < sub.dailyPricePaise) continue;
@@ -64,25 +96,24 @@ export async function ensureTodayDeliveries(deliveryPersonId: string, today: Dat
     const largeBottles = sub.largeBotles ?? (quantityMl >= 1000 ? Math.floor(quantityMl / 1000) : 0);
     const smallBottles = sub.smallBottles ?? (quantityMl % 1000 >= 500 ? 1 : 0);
 
-    await prisma.delivery.upsert({
-      where: {
-        customerId_deliveryDate: {
-          customerId: c.id,
-          deliveryDate: today,
-        },
-      },
-      create: {
-        customerId: c.id,
-        deliveryPersonId,
-        deliveryDate: today,
-        quantityMl,
-        largeBottles,
-        smallBottles,
-        chargePaise: sub.dailyPricePaise,
-        depositPaise: 0,
-        status: 'SCHEDULED',
-      },
-      update: {},
+    toCreate.push({
+      customerId: c.id,
+      deliveryPersonId,
+      deliveryDate: today,
+      quantityMl,
+      largeBottles,
+      smallBottles,
+      chargePaise: sub.dailyPricePaise,
+      depositPaise: 0,
+      status: 'SCHEDULED' as const, // explicit cast for prisma
+    });
+  }
+
+  // 5. Bulk create
+  if (toCreate.length > 0) {
+    await prisma.delivery.createMany({
+      data: toCreate,
+      skipDuplicates: true, // Safe guard
     });
   }
 }
@@ -138,7 +169,7 @@ router.get('/assignees', isAuthenticated, isDelivery, async (req, res) => {
     const customers = await prisma.customer.findMany({
       where: { deliveryPersonId: req.user.id },
       include: {
-        subscription: { select: { dailyQuantityMl: true } },
+        subscription: { select: { dailyQuantityMl: true, status: true } },
       },
       orderBy: { updatedAt: 'desc' },
     });
@@ -147,11 +178,24 @@ router.get('/assignees', isAuthenticated, isDelivery, async (req, res) => {
       name: c.name,
       phone: c.phone,
       address: `${c.addressLine1}${c.addressLine2 ? ', ' + c.addressLine2 : ''}, ${c.pincode}`,
+
+      // Full details for modal pre-fetching
+      addressLine1: c.addressLine1,
+      addressLine2: c.addressLine2,
+      landmark: c.landmark,
+      deliveryNotes: c.deliveryNotes,
+      city: c.city,
+      pincode: c.pincode,
+
       plan: c.subscription
         ? c.subscription.dailyQuantityMl >= 1000
           ? `${c.subscription.dailyQuantityMl / 1000}L`
           : `${c.subscription.dailyQuantityMl}ml`
         : '—',
+      subscription: c.subscription ? {
+        dailyQuantityMl: c.subscription.dailyQuantityMl,
+        status: c.subscription.status,
+      } : null,
       status: c.status,
     }));
     res.json({ assignees: list });
@@ -177,7 +221,14 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
       end = tomorrowStart();
     }
     // Build list for this date (create Delivery rows if missing for this day)
-    await ensureTodayDeliveries(req.user.id, start);
+    // Optimization: Only ensure deliveries if we are looking at today or a future date
+    // Past dates should already have deliveries generated, or we don't want to backfill them now (unless requested)
+    const now = new Date();
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    if (start >= todayMidnight) {
+      await ensureTodayDeliveries(req.user.id, start);
+    }
     const rawDeliveries = await prisma.delivery.findMany({
       where: {
         deliveryPersonId: req.user.id,
@@ -192,55 +243,49 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
             addressLine1: true,
             addressLine2: true,
             landmark: true,
+            deliveryNotes: true,
+            city: true,
+            pincode: true,
+            subscription: { select: { dailyPricePaise: true, startDate: true } },
+            wallet: { select: { balancePaise: true } },
           },
         },
       },
       orderBy: { deliveryDate: 'asc' },
     });
-    // Exclude deliveries for customers who are paused today or have insufficient balance
+    // Optimized: Exclude deliveries for customers who are paused today or have insufficient balance
+    // Since ensureTodayDeliveries already filters these, we can trust the deliveries exist
+    // But we still need to filter out any that might have been paused/blocked after creation
     const customerIds = rawDeliveries.map((d) => d.customerId);
-    const [pausedToday, customersWithWallet] = await Promise.all([
-      customerIds.length > 0
-        ? prisma.pause.findMany({
-            where: { customerId: { in: customerIds }, pauseDate: start },
-            select: { customerId: true },
-          })
-        : [],
-      customerIds.length > 0
-        ? prisma.customer.findMany({
-            where: { id: { in: customerIds } },
-            include: { subscription: true, wallet: true },
-          })
-        : [],
-    ]);
+
+    // Only check for pauses separately (since pause date specific to today isn't on customer/subscription)
+    const pausedToday = customerIds.length > 0
+      ? await prisma.pause.findMany({
+        where: { customerId: { in: customerIds }, pauseDate: start },
+        select: { customerId: true },
+      })
+      : [];
+
     const pausedCustomerIds = new Set(pausedToday.map((p) => p.customerId));
-    const unpaidCustomerIds = new Set(
-      customersWithWallet
-        .filter((c) => {
-          const balance = c.wallet?.balancePaise ?? 0;
-          const oneDay = c.subscription?.dailyPricePaise ?? 0;
-          return oneDay > 0 && balance < oneDay;
-        })
-        .map((c) => c.id)
-    );
-    // Exclude customers whose subscription starts after today (e.g. plan 1 Feb–1 Mar → show from 1 Feb only)
-    const subscriptionNotStartedCustomerIds = new Set(
-      customersWithWallet
-        .filter((c) => {
-          const subStart = c.subscription?.startDate;
-          if (!subStart) return false;
-          const startOnly = new Date(subStart);
-          startOnly.setHours(0, 0, 0, 0);
-          return startOnly > start;
-        })
-        .map((c) => c.id)
-    );
-    const deliveries = rawDeliveries.filter(
-      (d) =>
-        !pausedCustomerIds.has(d.customerId) &&
-        !unpaidCustomerIds.has(d.customerId) &&
-        !subscriptionNotStartedCustomerIds.has(d.customerId)
-    );
+
+    const deliveries = rawDeliveries.filter((d) => {
+      if (pausedCustomerIds.has(d.customerId)) return false;
+      const customer = d.customer;
+
+      // Check wallet balance
+      const balance = customer.wallet?.balancePaise ?? 0;
+      const oneDay = customer.subscription?.dailyPricePaise ?? 0;
+      if (oneDay > 0 && balance < oneDay) return false;
+
+      // Check subscription start date
+      const subStart = customer.subscription?.startDate;
+      if (subStart) {
+        const startOnly = new Date(subStart);
+        startOnly.setHours(0, 0, 0, 0);
+        if (startOnly > start) return false;
+      }
+      return true;
+    });
     const completed = deliveries.filter((d) => d.status === 'DELIVERED').length;
     const totalLiters = deliveries.reduce((s, d) => s + d.quantityMl / 1000, 0);
     const total1LBottles = deliveries.reduce((s, d) => s + d.largeBottles, 0);
@@ -290,6 +335,9 @@ router.get('/history', isAuthenticated, isDelivery, async (req, res) => {
             addressLine1: true,
             addressLine2: true,
             landmark: true,
+            deliveryNotes: true,
+            city: true,
+            pincode: true,
           },
         },
       },
@@ -361,23 +409,23 @@ router.get('/customer/:customerId', isAuthenticated, isDelivery, async (req, res
         status: customer.status,
         subscription: customer.subscription
           ? {
-              dailyQuantityMl: customer.subscription.dailyQuantityMl,
-              status: customer.subscription.status,
-            }
+            dailyQuantityMl: customer.subscription.dailyQuantityMl,
+            status: customer.subscription.status,
+          }
           : null,
       },
       delivery: delivery
         ? {
-            id: delivery.id,
-            deliveryDate: delivery.deliveryDate,
-            quantityMl: delivery.quantityMl,
-            largeBottles: delivery.largeBottles,
-            smallBottles: delivery.smallBottles,
-            status: delivery.status,
-            deliveryNotes: delivery.deliveryNotes,
-            largeBottlesCollected: delivery.largeBottlesCollected,
-            smallBottlesCollected: delivery.smallBottlesCollected,
-          }
+          id: delivery.id,
+          deliveryDate: delivery.deliveryDate,
+          quantityMl: delivery.quantityMl,
+          largeBottles: delivery.largeBottles,
+          smallBottles: delivery.smallBottles,
+          status: delivery.status,
+          deliveryNotes: delivery.deliveryNotes,
+          largeBottlesCollected: delivery.largeBottlesCollected,
+          smallBottlesCollected: delivery.smallBottlesCollected,
+        }
         : null,
       bottleBalance: {
         large: lastLedger?.largeBottleBalanceAfter ?? 0,
@@ -448,26 +496,36 @@ router.patch('/:id/mark', isAuthenticated, isDelivery, async (req, res) => {
 router.get('/bottle-ledger', isAuthenticated, isDelivery, async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Optimized: Fetch customers and their latest bottle ledger entry in a single query
     const customers = await prisma.customer.findMany({
       where: { deliveryPersonId: req.user.id },
-      select: { id: true, name: true, phone: true },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        bottleLedger: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            largeBottleBalanceAfter: true,
+            smallBottleBalanceAfter: true
+          }
+        }
+      },
     });
-    const summaries: { customerId: string; name: string; phone: string; largePending: number; smallPending: number }[] = [];
-    for (const c of customers) {
-      const ledgers = await prisma.bottleLedger.findMany({
-        where: { customerId: c.id },
-        orderBy: { createdAt: 'desc' },
-        take: 1,
-      });
-      const last = ledgers[0];
-      summaries.push({
+
+    const summaries = customers.map((c) => {
+      const last = c.bottleLedger[0];
+      return {
         customerId: c.id,
         name: c.name,
         phone: c.phone,
         largePending: last?.largeBottleBalanceAfter ?? 0,
         smallPending: last?.smallBottleBalanceAfter ?? 0,
-      });
-    }
+      };
+    });
+
     res.json({ summaries });
   } catch (error) {
     console.error('Bottle ledger error:', error);

@@ -68,16 +68,20 @@ router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
       0
     );
 
+    const revenueByDayMap: Record<string, number> = {};
+    walletTransactions.forEach((t) => {
+      if (t.amountPaise > 0) {
+        const dateKey = new Date(t.createdAt).toISOString().slice(0, 10);
+        revenueByDayMap[dateKey] = (revenueByDayMap[dateKey] || 0) + t.amountPaise;
+      }
+    });
+
     const revenueByDay: number[] = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(todayStart);
       d.setDate(d.getDate() - i);
-      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-      const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
-      const dayTxns = walletTransactions.filter(
-        (t) => new Date(t.createdAt) >= dayStart && new Date(t.createdAt) <= dayEnd && t.amountPaise > 0
-      );
-      const dayRevenue = dayTxns.reduce((s, t) => s + Math.abs(t.amountPaise), 0);
+      const dateKey = d.toISOString().slice(0, 10);
+      const dayRevenue = revenueByDayMap[dateKey] || 0;
       revenueByDay.push(Math.round(dayRevenue / 100));
     }
 
@@ -118,12 +122,12 @@ router.get('/customers', isAuthenticated, isAdmin, async (req, res) => {
       where: {
         ...(search
           ? {
-              OR: [
-                { name: { contains: search, mode: 'insensitive' as const } },
-                { email: { contains: search, mode: 'insensitive' as const } },
-                { phone: { contains: search } },
-              ],
-            }
+            OR: [
+              { name: { contains: search, mode: 'insensitive' as const } },
+              { email: { contains: search, mode: 'insensitive' as const } },
+              { phone: { contains: search } },
+            ],
+          }
           : {}),
         ...(statusFilter && statusFilter !== 'all' ? { status: statusFilter as any } : {}),
         ...(zoneFilter && zoneFilter !== 'all' ? { deliveryPerson: { zone: zoneFilter } } : {}),
@@ -235,28 +239,28 @@ router.get('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
       },
       wallet: customer.wallet
         ? {
-            balancePaise: customer.wallet.balancePaise,
-            balanceRs: (customer.wallet.balancePaise / 100).toFixed(2),
-          }
+          balancePaise: customer.wallet.balancePaise,
+          balanceRs: (customer.wallet.balancePaise / 100).toFixed(2),
+        }
         : null,
       lastTransaction: customer.wallet?.transactions?.[0]
         ? {
-            id: customer.wallet.transactions[0].id,
-            type: customer.wallet.transactions[0].type,
-            amountPaise: customer.wallet.transactions[0].amountPaise,
-            amountRs: (customer.wallet.transactions[0].amountPaise / 100).toFixed(2),
-            description: customer.wallet.transactions[0].description,
-            createdAt: customer.wallet.transactions[0].createdAt,
-          }
+          id: customer.wallet.transactions[0].id,
+          type: customer.wallet.transactions[0].type,
+          amountPaise: customer.wallet.transactions[0].amountPaise,
+          amountRs: (customer.wallet.transactions[0].amountPaise / 100).toFixed(2),
+          description: customer.wallet.transactions[0].description,
+          createdAt: customer.wallet.transactions[0].createdAt,
+        }
         : null,
       subscription: customer.subscription
         ? {
-            dailyQuantityMl: customer.subscription.dailyQuantityMl,
-            dailyPricePaise: customer.subscription.dailyPricePaise,
-            status: customer.subscription.status,
-            largeBottles: customer.subscription.largeBotles,
-            smallBottles: customer.subscription.smallBottles,
-          }
+          dailyQuantityMl: customer.subscription.dailyQuantityMl,
+          dailyPricePaise: customer.subscription.dailyPricePaise,
+          status: customer.subscription.status,
+          largeBottles: customer.subscription.largeBotles,
+          smallBottles: customer.subscription.smallBottles,
+        }
         : null,
       bottleBalance: lastLedger
         ? { large: lastLedger.largeBottleBalanceAfter, small: lastLedger.smallBottleBalanceAfter }

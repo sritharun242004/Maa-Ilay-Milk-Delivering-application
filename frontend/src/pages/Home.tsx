@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Phone,
   Leaf,
+  Milk,
   Sparkles,
   Heart,
   CheckCircle,
@@ -15,6 +16,11 @@ import {
   Instagram,
   Twitter,
 } from 'lucide-react';
+
+import heroBg from '../assets/hero-background-new.png';
+import product1l from '../assets/product-1l.jpg';
+import product500ml from '../assets/product-500ml.jpg';
+import commitmentImg from '../assets/commitment.jpg';
 
 export const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -49,60 +55,107 @@ export const Home: React.FC = () => {
         </div>
       </nav>
 
-      <section className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-48 py-32 flex items-center overflow-hidden relative">
-        <div className="absolute -top-10 -right-10 w-72 h-72 bg-emerald-200 rounded-full blur-3xl opacity-30 animate-pulse"></div>
-        <div className="absolute -bottom-10 -left-10 w-72 h-72 bg-teal-200 rounded-full blur-3xl opacity-30 animate-pulse"></div>
+      <section className="relative min-h-screen flex items-center overflow-hidden">
+        {/* Background Image - Clean and Crisp */}
+        <div className="absolute inset-0 z-0">
+          <img
+            src={heroBg}
+            alt="Maa Ilay Fresh Milk"
+            className="w-full h-full object-cover object-top"
+          />
+        </div>
+        {/* Background Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/300 to-black/10"></div>
 
-        <div className="max-w-[1400px] mx-auto px-8 relative z-10">
-          <div className="grid lg:grid-cols-2 grid-cols-1 gap-16 items-center">
-            <div className="animate-fade-in-up">
-              <div className="inline-flex items-center gap-2.5 bg-white/90 backdrop-blur-sm border border-emerald-200 rounded-full px-4 py-2 shadow-sm mb-8">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-semibold text-emerald-700">
-                  Serving Pondicherry & Auroville
-                </span>
-              </div>
-
-              <h1 className="text-6xl md:text-7xl font-black leading-tight tracking-tight mb-8">
-                <span className="text-gray-900 block">Fresh Milk</span>
-                <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent block mt-2">
-                  from Local Farms
-                </span>
-              </h1>
-
-              <p className="text-xl text-gray-600 max-w-xl mb-10 leading-relaxed">
-                Naturally grown, traditionally prepared, delivered with care to your doorstep every morning.
-              </p>
-
-              <div className="flex flex-wrap gap-4">
-                <button
-                  onClick={() => navigate('/customer/login')}
-                  className="group px-10 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl text-lg font-semibold shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300 flex items-center gap-2"
-                >
-                  Start Subscription
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </button>
-                <button
-                  onClick={scrollToProducts}
-                  className="px-10 py-4 bg-white border-2 border-gray-300 text-gray-700 rounded-xl text-lg font-semibold hover:border-emerald-500 hover:text-emerald-600 hover:shadow-lg transition-all duration-300"
-                >
-                  Explore Products
-                </button>
-              </div>
+        {/* Content Container */}
+        <div className="relative z-10 max-w-[1400px] mx-auto px-8 py-32 pt-48 w-full">
+          <div className="max-w-3xl">
+            {/* Premium Badge */}
+            <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full px-5 py-2.5 shadow-2xl mb-6 animate-fade-in-up">
+              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shadow-lg shadow-emerald-400/50"></div>
+              <span className="text-xs font-semibold text-white tracking-wide uppercase">
+                🌾 Farm Fresh • Naturally Grown • Delivered Daily
+              </span>
             </div>
 
-            <div className="relative h-[600px] animate-fade-in">
-              <div className="h-full rounded-3xl overflow-hidden shadow-2xl transition-transform duration-500 hover:scale-[1.02]">
-                <img
-                  src="https://images.unsplash.com/photo-1563636619-e9143da7973b?w=800&h=1000&fit=crop"
-                  alt="Fresh milk bottle"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-emerald-900/20 to-transparent"></div>
+            {/* Main Heading with Enhanced Brightness */}
+            <h1 className="text-5xl md:text-6xl font-extrabold leading-tight tracking-tight mb-6 animate-fade-in-up animation-delay-100">
+              <span className="block text-white drop-shadow-[0_8px_16px_rgba(0,0,0,0.7)]">
+                Fresh Milk
+              </span>
+              <span className="block bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] mt-1">
+                from Local Farms
+              </span>
+            </h1>
+
+            {/* Subtitle with Enhanced Glassmorphism for legibility */}
+            <div className="bg-white/20 backdrop-blur-xl border border-white/30 rounded-2xl p-6 mb-8 shadow-[0_20px_50px_rgba(0,0,0,0.3)] animate-fade-in-up animation-delay-200">
+              <p className="text-xl text-white font-semibold leading-relaxed drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                Naturally grown, traditionally prepared, delivered with care to your doorstep every morning.
+                <span className="block mt-2 text-emerald-300 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]">
+                  Pure. Fresh. Wholesome.
+                </span>
+              </p>
+            </div>
+
+            {/* CTA Buttons with Premium Effects */}
+            <div className="flex flex-wrap gap-4 animate-fade-in-up animation-delay-300">
+              <button
+                onClick={() => navigate('/customer/login')}
+                className="group relative px-8 py-3.5 bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 text-white rounded-xl text-base font-semibold shadow-2xl hover:shadow-emerald-500/50 hover:scale-105 transition-all duration-300 overflow-hidden"
+              >
+                {/* Button shine effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                <span className="relative flex items-center gap-2">
+                  Start Your Subscription
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </span>
+              </button>
+
+              <button
+                onClick={scrollToProducts}
+                className="group px-8 py-3.5 bg-white/10 backdrop-blur-xl border-2 border-white/30 text-white rounded-xl text-base font-semibold hover:bg-white/20 hover:border-white/50 hover:scale-105 shadow-2xl transition-all duration-300"
+              >
+                <span className="flex items-center gap-2">
+                  Explore Our Products
+                  <Sparkles className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+                </span>
+              </button>
+            </div>
+
+            {/* Trust Indicators */}
+            <div className="mt-12 flex flex-wrap items-center gap-6 animate-fade-in-up animation-delay-400">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 bg-emerald-500/20 backdrop-blur-sm border border-emerald-400/30 rounded-lg flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-emerald-300" />
+                </div>
+                <div>
+                  <p className="text-white font-semibold text-sm">100% Natural</p>
+                  <p className="text-white/70 text-xs">No chemicals</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 bg-teal-500/20 backdrop-blur-sm border border-teal-400/30 rounded-lg flex items-center justify-center">
+                  <Leaf className="w-5 h-5 text-teal-300" />
+                </div>
+                <div>
+                  <p className="text-white font-semibold text-sm">Farm Fresh</p>
+                  <p className="text-white/70 text-xs">Daily delivery</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 bg-cyan-500/20 backdrop-blur-sm border border-cyan-400/30 rounded-lg flex items-center justify-center">
+                  <Heart className="w-5 h-5 text-cyan-300" />
+                </div>
+                <div>
+                  <p className="text-white font-semibold text-sm">Pure Quality</p>
+                  <p className="text-white/70 text-xs">Trusted by families</p>
+                </div>
               </div>
             </div>
           </div>
-
         </div>
       </section>
 
@@ -115,25 +168,31 @@ export const Home: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 grid-cols-1 gap-8 mt-16">
+          <div className="grid md:grid-cols-4 grid-cols-1 gap-8 mt-16">
             {[
               {
                 icon: Leaf,
                 title: 'Naturally Grown & Collected',
                 description: 'Our products come from farms that practice natural, chemical-free farming methods.',
-                gradient: 'from-emerald-500 to-emerald-600',
+                gradient: 'from-emerald-600 to-green-500',
+              },
+              {
+                icon: Milk,
+                title: 'A2 Quality Milk',
+                description: 'Sourced from indigenous cows, our A2 milk contains only A2 beta-casein protein, making it easier to digest and naturally richer in nutrients.',
+                gradient: 'from-green-500 to-emerald-600',
               },
               {
                 icon: Sparkles,
                 title: 'Traditionally Prepared',
                 description: 'Time-tested traditional methods ensure authentic taste and nutritional value.',
-                gradient: 'from-teal-500 to-teal-600',
+                gradient: 'from-green-500 to-emerald-600',
               },
               {
                 icon: Heart,
                 title: 'Wholesome Experience',
                 description: 'From farm to table, we ensure quality, freshness, and care in every delivery.',
-                gradient: 'from-cyan-500 to-cyan-600',
+                gradient: 'from-emerald-600 to-green-500',
               },
             ].map((item, index) => (
               <div
@@ -158,20 +217,21 @@ export const Home: React.FC = () => {
             <p className="text-lg text-gray-600">Fresh, pure cow milk delivered daily to your doorstep</p>
           </div>
 
-          <div className="grid md:grid-cols-2 grid-cols-1 gap-12 max-w-4xl mx-auto">
+          <div className="grid md:grid-cols-2 grid-cols-1 gap-12 max-w-3xl mx-auto">
+            {/**/}
             {[
               {
                 name: 'Fresh Cow Milk (1L)',
                 benefit: 'Perfect for families. Pure, fresh milk delivered every morning.',
                 price: `₹${PRICING.DAILY_1L_RS}/day`,
-                image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=600&h=400&fit=crop',
+                image: product1l,
                 popular: true,
               },
               {
                 name: 'Fresh Cow Milk (500ml)',
                 benefit: 'Ideal for individuals. Fresh, pure milk in a convenient size for daily consumption.',
                 price: `₹${PRICING.DAILY_500ML_RS}/day`,
-                image: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=600&h=400&fit=crop',
+                image: product500ml,
                 popular: false,
               },
             ].map((product, index) => (
@@ -207,8 +267,8 @@ export const Home: React.FC = () => {
           <div className="grid lg:grid-cols-2 grid-cols-1 gap-16 items-center">
             <div className="rounded-3xl overflow-hidden shadow-2xl transition-transform duration-500 hover:scale-[1.02]">
               <img
-                src="https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=800&h=600&fit=crop"
-                alt="Farm landscape"
+                src={commitmentImg}
+                alt="Our Commitment"
                 className="w-full aspect-[4/3] object-cover"
               />
             </div>

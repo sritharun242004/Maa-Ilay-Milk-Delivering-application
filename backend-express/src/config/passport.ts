@@ -1,3 +1,4 @@
+import 'dotenv/config'; 
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as LocalStrategy } from 'passport-local';
@@ -7,14 +8,23 @@ import prisma from './prisma';
 // ============================================================================
 // GOOGLE OAUTH STRATEGY (for Customers)
 // ============================================================================
-passport.use(
-  'google',
-  new GoogleStrategy(
-    {
-      clientID: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:4000/api/auth/google/callback',
-    },
+console.log('=== Environment Variables Check ===');
+console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? '✓ SET (' + process.env.GOOGLE_CLIENT_ID.substring(0, 20) + '...)' : '✗ MISSING');
+console.log('GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? '✓ SET' : '✗ MISSING');
+console.log('DATABASE_URL:', process.env.DATABASE_URL ? '✓ SET' : '✗ MISSING');
+console.log('Working directory:', process.cwd());
+console.log('===================================');
+
+// Only register Google OAuth strategy if credentials are available
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(
+    'google',
+    new GoogleStrategy(
+      {
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:4000/api/auth/google/callback',
+      },
     async (accessToken, refreshToken, profile, done) => {
       try {
         const email = profile.emails?.[0]?.value;
@@ -57,7 +67,12 @@ passport.use(
       }
     }
   )
-);
+  );
+} else {
+  console.warn('⚠️  WARNING: Google OAuth credentials not found in .env file!');
+  console.warn('⚠️  Customer login with Google will not work until GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set.');
+  console.warn('⚠️  Please add these variables to backend-express/.env file');
+}
 
 // ============================================================================
 // ADMIN LOGIN STRATEGY (email + password)
