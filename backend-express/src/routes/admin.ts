@@ -378,8 +378,9 @@ router.get('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
   try {
     const id = req.params.id;
     const now = new Date();
-    const year = now.getUTCFullYear();
-    const month = now.getUTCMonth();
+    // Accept optional year/month query parameters for calendar navigation
+    const year = req.query.year ? parseInt(req.query.year as string) : now.getUTCFullYear();
+    const month = req.query.month ? parseInt(req.query.month as string) : now.getUTCMonth();
 
     // UTC month boundaries
     const firstDay = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));

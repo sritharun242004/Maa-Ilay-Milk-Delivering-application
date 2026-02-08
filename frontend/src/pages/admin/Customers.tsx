@@ -4,7 +4,7 @@ import { AdminLayout } from '../../components/layouts/AdminLayout';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Search, MoreVertical, User, X, Calendar, Wallet, Package, Receipt } from 'lucide-react';
+import { Search, MoreVertical, User, X, Calendar, Wallet, Package, Receipt, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatDateLocal } from '../../lib/date';
 import { useDeliveryTeam } from '../../hooks/useCachedData';
 import { fetchWithCsrf } from '../../utils/csrf';
@@ -89,6 +89,10 @@ export const AdminCustomers: React.FC = () => {
   const [selectedDeliveryDate, setSelectedDeliveryDate] = useState<string | null>(null);
   const [deliveryDetails, setDeliveryDetails] = useState<any>(null);
   const [deliveryDetailsLoading, setDeliveryDetailsLoading] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
 
   const fetchCustomers = useCallback((showLoading = true) => {
     if (showLoading) {
@@ -162,9 +166,22 @@ export const AdminCustomers: React.FC = () => {
       setDetailData(null);
       return;
     }
+    // Reset calendar to current month when opening a customer profile
+    const now = new Date();
+    setCalendarMonth({ year: now.getFullYear(), month: now.getMonth() });
+  }, [detailCustomerId]);
+
+  useEffect(() => {
+    if (!detailCustomerId) {
+      setDetailData(null);
+      return;
+    }
     setDetailLoading(true);
     setDetailData(null);
-    fetch(`/api/admin/customers/${detailCustomerId}`, { credentials: 'include' })
+    const params = new URLSearchParams();
+    params.set('year', calendarMonth.year.toString());
+    params.set('month', calendarMonth.month.toString());
+    fetch(`/api/admin/customers/${detailCustomerId}?${params}`, { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load customer');
         return res.json();
@@ -172,7 +189,7 @@ export const AdminCustomers: React.FC = () => {
       .then(setDetailData)
       .catch(() => setDetailData(null))
       .finally(() => setDetailLoading(false));
-  }, [detailCustomerId]);
+  }, [detailCustomerId, calendarMonth]);
 
   useEffect(() => {
     if (!reassignCustomer) return;
@@ -472,9 +489,40 @@ export const AdminCustomers: React.FC = () => {
                     )}
                   </Card>
                   <Card className="p-4">
-                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <Calendar className="w-5 h-5 text-emerald-600" /> Calendar (this month)
-                    </h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-emerald-600" /> Delivery Calendar
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            const prevMonth = calendarMonth.month - 1;
+                            const prevYear = prevMonth < 0 ? calendarMonth.year - 1 : calendarMonth.year;
+                            const newMonth = prevMonth < 0 ? 11 : prevMonth;
+                            setCalendarMonth({ year: prevYear, month: newMonth });
+                          }}
+                          className="p-1 hover:bg-gray-100 rounded transition-colors"
+                          title="Previous month"
+                        >
+                          <ChevronLeft className="w-5 h-5 text-gray-600" />
+                        </button>
+                        <span className="text-sm font-medium text-gray-700 min-w-[120px] text-center">
+                          {new Date(calendarMonth.year, calendarMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                        </span>
+                        <button
+                          onClick={() => {
+                            const nextMonth = calendarMonth.month + 1;
+                            const nextYear = nextMonth > 11 ? calendarMonth.year + 1 : calendarMonth.year;
+                            const newMonth = nextMonth > 11 ? 0 : nextMonth;
+                            setCalendarMonth({ year: nextYear, month: newMonth });
+                          }}
+                          className="p-1 hover:bg-gray-100 rounded transition-colors"
+                          title="Next month"
+                        >
+                          <ChevronRight className="w-5 h-5 text-gray-600" />
+                        </button>
+                      </div>
+                    </div>
                     <p className="text-sm text-gray-500 mb-2">Paused dates: {detailData.calendar.pausedDates.length ? detailData.calendar.pausedDates.join(', ') : 'None'}</p>
                     <div className="grid grid-cols-7 gap-1 text-xs">
                       {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d) => (
