@@ -27,12 +27,12 @@ export function startPenaltyScheduler() {
       // Next run will be attempted the following day
     }
   }, {
-    scheduled: true,
     timezone: 'Asia/Kolkata', // IST timezone for Pondicherry
   });
 
+  job.start();
+
   console.log('[Scheduler] ✅ Penalty scheduler started. Will run daily at 1:00 AM IST');
-  console.log('[Scheduler] Next run:', job.nextDate()?.toISOString());
 
   return job;
 }

@@ -1063,7 +1063,7 @@ router.get('/inventory', isAuthenticated, isAdmin, async (req, res) => {
     res.status(500).json(createErrorResponse(
       ErrorCode.DATABASE_ERROR,
       'Failed to load inventory',
-      { originalError: e.message }
+      { originalError: e instanceof Error ? e.message : String(e) }
     ));
   }
 });
