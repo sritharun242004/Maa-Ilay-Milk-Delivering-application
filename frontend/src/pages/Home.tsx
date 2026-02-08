@@ -32,12 +32,13 @@ export const Home: React.FC = () => {
   return (
     <div className="min-h-screen bg-white">
       <nav className="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-[1350px] bg-white/80 backdrop-blur-2xl border border-white/40 shadow-2xl rounded-full transition-all duration-300">
-        <div className="px-8 md:px-10 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full shadow-lg flex items-center justify-center">
-              <Droplet className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-lg font-bold text-gray-900">Maa Ilay</span>
+        <div className="px-8 md:px-10 py-4 flex items-center justify-between">
+          <div className="flex items-center">
+            <img
+              src="/logo.png"
+              alt="Maa Ilay Logo"
+              className="h-12 w-auto object-contain"
+            />
           </div>
 
           <div className="flex items-center gap-3">
@@ -334,11 +335,12 @@ export const Home: React.FC = () => {
         <div className="max-w-[1400px] mx-auto px-8">
           <div className="grid md:grid-cols-4 grid-cols-1 gap-12 mb-12">
             <div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center">
-                  <Droplet className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-2xl font-bold">Maa Ilay</span>
+              <div className="mb-4">
+                <img
+                  src="/logo.png"
+                  alt="Maa Ilay Logo"
+                  className="h-14 w-auto object-contain brightness-0 invert"
+                />
               </div>
               <p className="text-gray-400 leading-relaxed">
                 Fresh milk for healthy lives. Naturally grown, traditionally prepared, delivered with care.
