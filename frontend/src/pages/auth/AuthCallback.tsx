@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { getApiUrl } from '../../config/api';
 
 export const AuthCallback: React.FC = () => {
     const navigate = useNavigate();
@@ -11,7 +12,7 @@ export const AuthCallback: React.FC = () => {
         const checkSession = async () => {
             try {
                 // Use Express backend session endpoint
-                const response = await fetch('/api/auth/session', {
+                const response = await fetch(getApiUrl('/api/auth/session'), {
                     credentials: 'include', // Important: include cookies
                 });
 

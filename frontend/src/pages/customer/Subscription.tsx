@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/Button';
 import { ChevronDown, Check, Info, Droplet } from 'lucide-react';
 import { DAILY_QUANTITY_OPTIONS } from '../../config/pricing';
 import { fetchWithCsrf, clearCsrfToken } from '../../utils/csrf';
+import { getApiUrl } from '../../config/api';
 
 type QuantityOption = (typeof DAILY_QUANTITY_OPTIONS)[number];
 
@@ -38,7 +39,7 @@ export const Subscription: React.FC = () => {
 
   const fetchDashboard = () => {
     setLoading(true);
-    fetch('/api/customer/dashboard', { credentials: 'include' })
+    fetch(getApiUrl('/api/customer/dashboard'), { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => {
         setDashboardData(data);

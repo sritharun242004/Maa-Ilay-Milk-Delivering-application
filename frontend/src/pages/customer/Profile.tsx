@@ -4,6 +4,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { User, Mail, Phone, MapPin, Edit2, Save, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { fetchWithCsrf } from '../../utils/csrf';
+import { getApiUrl } from '../../config/api';
 
 type ProfileData = {
   id: string;
@@ -55,7 +56,7 @@ export const Profile: React.FC = () => {
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/customer/dashboard', { credentials: 'include' });
+      const res = await fetch(getApiUrl('/api/customer/dashboard'), { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load profile');
       const data = await res.json();
       setProfile(data.customer);

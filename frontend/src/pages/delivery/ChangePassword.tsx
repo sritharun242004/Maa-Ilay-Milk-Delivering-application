@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { KeyRound, Droplet } from 'lucide-react';
+import { getApiUrl } from '../../config/api';
 
 export const DeliveryChangePassword: React.FC = () => {
   const navigate = useNavigate();
@@ -24,7 +25,7 @@ export const DeliveryChangePassword: React.FC = () => {
       return;
     }
     setSubmitting(true);
-    fetch('/api/delivery/me/password', {
+    fetch(getApiUrl('/api/delivery/me/password'), {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

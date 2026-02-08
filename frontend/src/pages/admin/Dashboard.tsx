@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AdminLayout } from '../../components/layouts/AdminLayout';
 import { Card } from '../../components/ui/Card';
 import { Droplet, Package, IndianRupee, Clock } from 'lucide-react';
+import { getApiUrl } from '../../config/api';
 
 type DashboardData = {
   todayLiters: number;
@@ -31,7 +32,7 @@ export const AdminDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/admin/dashboard', { credentials: 'include' })
+    fetch(getApiUrl('/api/admin/dashboard'), { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load dashboard');
         return res.json();

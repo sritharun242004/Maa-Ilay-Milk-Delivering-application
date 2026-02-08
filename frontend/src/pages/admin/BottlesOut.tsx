@@ -3,6 +3,7 @@ import { AdminLayout } from '../../components/layouts/AdminLayout';
 import { Card } from '../../components/ui/Card';
 import { ArrowLeft, Package, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getApiUrl } from '../../config/api';
 
 type BottleBalance = {
   customerName: string;
@@ -17,7 +18,7 @@ export const BottlesOut: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/admin/bottles-out', { credentials: 'include' })
+    fetch(getApiUrl('/api/admin/bottles-out'), { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => setBottlesData(data.bottles || []))
       .catch((err) => console.error('Failed to fetch bottles:', err))

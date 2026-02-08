@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Droplet, MapPin, Phone, Home, User, CheckCircle, AlertCircle } from 'lucide-react';
 import { fetchWithCsrf, clearCsrfToken } from '../../utils/csrf';
+import { getApiUrl } from '../../config/api';
 
 export const CustomerOnboarding: React.FC = () => {
   const navigate = useNavigate();
@@ -21,7 +22,7 @@ export const CustomerOnboarding: React.FC = () => {
 
   // Pre-fill name from session (Google gives us name)
   useEffect(() => {
-    fetch('/api/auth/session', { credentials: 'include' })
+    fetch(getApiUrl('/api/auth/session'), { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => {
         if (data.user?.name) setFormData((prev) => ({ ...prev, name: data.user.name }));

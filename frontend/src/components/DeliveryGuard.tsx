@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { getApiUrl } from '../config/api';
 
 interface DeliveryGuardProps {
   children: React.ReactNode;
@@ -9,7 +10,7 @@ export const DeliveryGuard: React.FC<DeliveryGuardProps> = ({ children }) => {
   const [mustChange, setMustChange] = useState<boolean | null>(null);
 
   useEffect(() => {
-    fetch('/api/delivery/me', { credentials: 'include' })
+    fetch(getApiUrl('/api/delivery/me'), { credentials: 'include' })
       .then((res) => (res.ok ? res.json() : { mustChangePassword: false }))
       .then((data) => setMustChange(data.mustChangePassword === true))
       .catch(() => setMustChange(false));

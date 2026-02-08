@@ -7,6 +7,7 @@ import { Badge } from '../../components/ui/Badge';
 import { DeliveryListSkeleton } from '../../components/ui/Skeleton';
 import { ChevronLeft, ChevronRight, Package, CheckCircle, Clock, Eye } from 'lucide-react';
 import { useTodayDeliveries, usePrefetchCustomer } from '../../hooks/useDeliveryData';
+import { getApiUrl } from '../../config/api';
 
 type DeliveryStatus = 'SCHEDULED' | 'DELIVERED' | 'NOT_DELIVERED' | 'PAUSED' | 'BLOCKED' | 'HOLIDAY';
 
@@ -86,7 +87,7 @@ export const TodayDeliveries: React.FC = () => {
   const { data: profile } = useQuery({
     queryKey: ['delivery', 'profile'],
     queryFn: async () => {
-      const res = await fetch('/api/delivery/me', { credentials: 'include' });
+      const res = await fetch(getApiUrl('/api/delivery/me'), { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to fetch profile');
       return res.json();
     },

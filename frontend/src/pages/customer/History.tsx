@@ -4,6 +4,7 @@ import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { formatDateLocal } from '../../lib/date';
 import { Package, CheckCircle } from 'lucide-react';
+import { getApiUrl } from '../../config/api';
 
 type DeliveryRow = {
   id: string;
@@ -43,7 +44,7 @@ export const History: React.FC = () => {
     if (activeTab === 'delivery') {
       setLoadingDelivery(true);
       setError(null);
-      fetch('/api/customer/history/deliveries', { credentials: 'include' })
+      fetch(getApiUrl('/api/customer/history/deliveries'), { credentials: 'include' })
         .then((res) => {
           if (!res.ok) throw new Error('Failed to load delivery history');
           return res.json();
@@ -58,7 +59,7 @@ export const History: React.FC = () => {
     if (activeTab === 'bottles') {
       setLoadingBottles(true);
       setError(null);
-      fetch('/api/customer/history/bottles', { credentials: 'include' })
+      fetch(getApiUrl('/api/customer/history/bottles'), { credentials: 'include' })
         .then((res) => {
           if (!res.ok) throw new Error('Failed to load bottle ledger');
           return res.json();

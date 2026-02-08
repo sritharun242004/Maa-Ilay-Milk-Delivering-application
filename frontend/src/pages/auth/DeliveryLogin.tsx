@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Droplet } from 'lucide-react';
+import { getApiUrl } from '../../config/api';
 
 export const DeliveryLogin: React.FC = () => {
   const navigate = useNavigate();
@@ -14,7 +15,7 @@ export const DeliveryLogin: React.FC = () => {
     
     try {
       // Use delivery-specific auth endpoint
-                const response = await fetch('/api/auth/delivery/login', {
+                const response = await fetch(getApiUrl('/api/auth/delivery/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

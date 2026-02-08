@@ -4,6 +4,7 @@ import { CustomerLayout } from '../../components/layouts/CustomerLayout';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import {
+import { getApiUrl } from '../../config/api';
   Wallet,
   CheckCircle,
   Truck,
@@ -16,8 +17,6 @@ import {
   ArrowRight,
   AlertCircle,
 } from 'lucide-react';
-import { PRICING } from '../../config/pricing';
-import { formatDateLocal } from '../../lib/date';
 
 type DashboardData = {
   customer: {
@@ -75,7 +74,7 @@ export const CustomerDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/customer/dashboard', { credentials: 'include' })
+    fetch(getApiUrl('/api/customer/dashboard'), { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load dashboard');
         return res.json();

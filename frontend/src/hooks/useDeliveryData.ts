@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getApiUrl } from '../config/api';
 
 // Query keys for consistent cache management
 export const deliveryKeys = {
@@ -32,7 +33,7 @@ export function useAssignees() {
   return useQuery({
     queryKey: deliveryKeys.assignees,
     queryFn: async () => {
-      const res = await fetch('/api/delivery/assignees', { credentials: 'include' });
+      const res = await fetch(getApiUrl('/api/delivery/assignees'), { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to fetch assignees');
       return res.json();
     },

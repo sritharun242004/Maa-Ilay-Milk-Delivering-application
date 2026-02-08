@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { clearAllCaches } from '../hooks/useCachedData';
+import { getApiUrl } from '../config/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -11,8 +12,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const API_BASE = '/api';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -28,7 +27,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = () => {
     // Clear server session so cookie is invalidated
-    fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => { });
+    fetch(getApiUrl('/api/auth/logout'), { method: 'POST', credentials: 'include' }).catch(() => { });
 
     // Clear all cached data on logout
     clearAllCaches();
@@ -44,7 +43,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000); // 15 sec timeout
 
-    fetch(`${API_BASE}/auth/session`, {
+    fetch(getApiUrl('/api/auth/session'), {
       credentials: 'include',
       signal: controller.signal
     })

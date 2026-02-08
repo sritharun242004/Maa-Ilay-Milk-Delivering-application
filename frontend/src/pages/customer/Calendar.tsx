@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { ChevronLeft, ChevronRight, AlertCircle, Calendar as CalendarIcon, Info, X, CheckCircle2, Loader2 } from 'lucide-react';
 import { useCalendarData, invalidateCalendarCache } from '../../hooks/useCachedData';
 import { fetchWithCsrf, clearCsrfToken } from '../../utils/csrf';
+import { getApiUrl } from '../../config/api';
 
 type CalendarData = {
   pauseDaysUsed: number;
@@ -46,7 +47,7 @@ export const CustomerCalendar: React.FC = () => {
     // Create AbortController for cleanup
     const controller = new AbortController();
 
-    fetch(`/api/customer/calendar?year=${year}&month=${month}`, {
+    fetch(getApiUrl(`/api/customer/calendar?year=${year}&month=${month}`), {
       credentials: 'include',
       signal: controller.signal
     })
@@ -208,7 +209,7 @@ export const CustomerCalendar: React.FC = () => {
   const fetchPauseHistory = useCallback(() => {
     const controller = new AbortController();
 
-    fetch('/api/customer/pause-history', {
+    fetch(getApiUrl('/api/customer/pause-history'), {
       credentials: 'include',
       signal: controller.signal
     })

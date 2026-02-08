@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Droplet } from 'lucide-react';
+import { getApiUrl } from '../../config/api';
 
 export const AdminLogin: React.FC = () => {
   const navigate = useNavigate();
@@ -14,7 +15,7 @@ export const AdminLogin: React.FC = () => {
     
     try {
       // Use admin-specific auth endpoint
-                const response = await fetch('/api/auth/admin/login', {
+                const response = await fetch(getApiUrl('/api/auth/admin/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

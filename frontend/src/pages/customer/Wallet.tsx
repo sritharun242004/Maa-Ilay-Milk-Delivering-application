@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { formatDateLocal } from '../../lib/date';
 import { Plus, X, Wallet as WalletIcon, Info, Check } from 'lucide-react';
 import { fetchWithCsrf, clearCsrfToken } from '../../utils/csrf';
+import { getApiUrl } from '../../config/api';
 
 type WalletData = {
   balancePaise: number;
@@ -38,7 +39,7 @@ export const Wallet: React.FC = () => {
 
   const fetchWallet = () => {
     setLoading(true);
-    fetch('/api/customer/wallet', { credentials: 'include' })
+    fetch(getApiUrl('/api/customer/wallet'), { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load wallet');
         return res.json();

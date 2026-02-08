@@ -3,6 +3,8 @@
  * Fetches and manages CSRF tokens for API requests
  */
 
+import { getApiUrl } from '../config/api';
+
 let cachedToken: string | null = null;
 
 /**
@@ -15,7 +17,7 @@ export async function fetchCsrfToken(): Promise<string> {
   }
 
   try {
-    const response = await fetch('/api/csrf-token', {
+    const response = await fetch(getApiUrl('/api/csrf-token'), {
       method: 'GET',
       credentials: 'include',
     });
@@ -56,7 +58,7 @@ export async function fetchWithCsrf(
   const headers = new Headers(options.headers);
   headers.set('X-CSRF-Token', token);
 
-  return fetch(url, {
+  return fetch(getApiUrl(url), {
     ...options,
     credentials: 'include',
     headers,

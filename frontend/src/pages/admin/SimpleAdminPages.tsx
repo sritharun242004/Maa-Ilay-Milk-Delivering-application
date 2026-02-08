@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/Button';
 import { Plus, Pencil, KeyRound } from 'lucide-react';
 import { useDeliveryTeam } from '../../hooks/useCachedData';
 import { fetchWithCsrf, clearCsrfToken } from '../../utils/csrf';
+import { getApiUrl } from '../../config/api';
 
 type StaffRow = {
   id: string;
@@ -365,7 +366,7 @@ function EditDeliveryModal({
     e.preventDefault();
     onError(null);
     setSubmitting(true);
-    fetch(`/api/admin/delivery-team/${staff.id}`, {
+    fetch(getApiUrl(`/api/admin/delivery-team/${staff.id}`), {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -572,7 +573,7 @@ export const Inventory: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/admin/inventory', { credentials: 'include' })
+    fetch(getApiUrl('/api/admin/inventory'), { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load inventory');
         return res.json();
@@ -657,7 +658,7 @@ export const Penalties: React.FC = () => {
   const fetchData = () => {
     setLoading(true);
     setError(null);
-    fetch('/api/admin/penalties', { credentials: 'include' })
+    fetch(getApiUrl('/api/admin/penalties'), { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load penalties');
         return res.json();
