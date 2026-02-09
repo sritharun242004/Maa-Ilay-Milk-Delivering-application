@@ -56,7 +56,7 @@ export const DeliveryTeam: React.FC = () => {
     return (
       <AdminLayout>
         <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[40vh]">
-          <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
         </div>
       </AdminLayout>
     );
@@ -109,7 +109,7 @@ export const DeliveryTeam: React.FC = () => {
           </Card>
           <Card className="p-6">
             <p className="text-sm text-gray-600 mb-1">Active Today</p>
-            <p className="text-4xl font-bold text-emerald-600">{d.activeToday}</p>
+            <p className="text-4xl font-bold text-green-800">{d.activeToday}</p>
           </Card>
         </div>
         <Card className="overflow-hidden">
@@ -141,7 +141,7 @@ export const DeliveryTeam: React.FC = () => {
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex flex-col gap-1">
-                        <span className="font-semibold text-emerald-600">
+                        <span className="font-semibold text-green-800">
                           {staff.todayDeliveries || 0} completed
                         </span>
                         <span className="text-sm text-gray-500">
@@ -154,7 +154,7 @@ export const DeliveryTeam: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => openEdit(staff)}
-                          className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-emerald-600"
+                          className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-green-800"
                           title="Edit"
                         >
                           <Pencil className="w-4 h-4" />
@@ -294,7 +294,7 @@ function AddDeliveryModal({
               onChange={(e) => setName(e.target.value)}
               required
               minLength={2}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
               placeholder="Full name"
             />
           </div>
@@ -306,7 +306,7 @@ function AddDeliveryModal({
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
               required
               maxLength={10}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
               placeholder="9876543210"
             />
           </div>
@@ -318,7 +318,7 @@ function AddDeliveryModal({
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
               placeholder="One-time password"
             />
           </div>
@@ -329,7 +329,7 @@ function AddDeliveryModal({
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               required
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
             />
           </div>
           <div className="flex gap-2 pt-2">
@@ -401,7 +401,7 @@ function EditDeliveryModal({
               onChange={(e) => setName(e.target.value)}
               required
               minLength={2}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
             />
           </div>
           <div>
@@ -412,7 +412,7 @@ function EditDeliveryModal({
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
               required
               maxLength={10}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -528,7 +528,7 @@ function ResetPasswordModal({
               onChange={(e) => setNewPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
             />
           </div>
           <div>
@@ -538,7 +538,7 @@ function ResetPasswordModal({
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               required
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
             />
           </div>
           <div className="flex gap-2 pt-2">
@@ -587,7 +587,7 @@ export const Inventory: React.FC = () => {
     return (
       <AdminLayout>
         <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[40vh]">
-          <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
         </div>
       </AdminLayout>
     );
@@ -606,17 +606,17 @@ export const Inventory: React.FC = () => {
         <h1 className="text-4xl font-bold text-gray-900 mb-2">Inventory</h1>
         <p className="text-gray-600 mb-8">Bottle stock (data from database)</p>
         <div className="grid md:grid-cols-3 gap-6">
-          <Card className="p-6 bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+          <Card className="p-6 bg-white">
             <p className="text-sm opacity-90 mb-2">Total Bottles</p>
             <p className="text-4xl font-bold mb-2">{d.totalBottles}</p>
             <p className="text-sm opacity-80">1L: {d.largeTotal} | 500ml: {d.smallTotal}</p>
           </Card>
-          <Card className="p-6 bg-gradient-to-br from-orange-500 to-orange-600 text-white">
+          <Card className="p-6 bg-white">
             <p className="text-sm opacity-90 mb-2">With Customers</p>
             <p className="text-4xl font-bold mb-2">{d.withCustomers}</p>
             <p className="text-sm opacity-80">1L: {d.largeInCirculation} | 500ml: {d.smallInCirculation}</p>
           </Card>
-          <Card className="p-6 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
+          <Card className="p-6 bg-white">
             <p className="text-sm opacity-90 mb-2">In Warehouse</p>
             <p className="text-4xl font-bold mb-2">{d.inWarehouse}</p>
             <p className="text-sm opacity-80">1L: {d.largeInWarehouse} | 500ml: {d.smallInWarehouse}</p>
@@ -640,8 +640,7 @@ type FlaggedCustomer = {
 };
 
 type PenaltiesData = {
-  totalPendingRs: number;
-  collectedThisMonthRs: number;
+  totalPendingBottles: number;
   flaggedCustomersCount: number;
   flaggedCustomers: FlaggedCustomer[];
   rules: string[];
@@ -676,7 +675,7 @@ export const Penalties: React.FC = () => {
     return (
       <AdminLayout>
         <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[40vh]">
-          <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
         </div>
       </AdminLayout>
     );
@@ -696,21 +695,16 @@ export const Penalties: React.FC = () => {
         <p className="text-gray-600 mb-8">Real-time penalty tracking (bottles not returned after 3 days)</p>
 
         {imposeResult && (
-          <div className={`mb-6 p-4 rounded-lg ${imposeResult.startsWith('✓') ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+          <div className={`mb-6 p-4 rounded-lg ${imposeResult.startsWith('✓') ? 'bg-green-50 border border-green-200 text-green-900' : 'bg-red-50 border border-red-200 text-red-800'}`}>
             {imposeResult}
           </div>
         )}
 
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
           <Card className="p-6">
-            <p className="text-sm text-gray-600 mb-1">Total Pending</p>
-            <p className="text-4xl font-bold text-orange-600">₹{d.totalPendingRs.toLocaleString('en-IN')}</p>
-            <p className="text-xs text-gray-500 mt-2">Penalties yet to be charged</p>
-          </Card>
-          <Card className="p-6">
-            <p className="text-sm text-gray-600 mb-1">Collected This Month</p>
-            <p className="text-4xl font-bold text-emerald-600">₹{d.collectedThisMonthRs.toLocaleString('en-IN')}</p>
-            <p className="text-xs text-gray-500 mt-2">Total penalties charged</p>
+            <p className="text-sm text-gray-600 mb-1">Overdue Bottles</p>
+            <p className="text-4xl font-bold text-orange-600">{d.totalPendingBottles}</p>
+            <p className="text-xs text-gray-500 mt-2">Total bottles not collected</p>
           </Card>
           <Card className="p-6">
             <p className="text-sm text-gray-600 mb-1">Flagged Customers</p>
@@ -836,22 +830,22 @@ function ImposeFineModal({
   imposing: boolean;
   setImposing: (val: boolean) => void;
 }) {
-  const [largeBottlePrice, setLargeBottlePrice] = useState('35');
-  const [smallBottlePrice, setSmallBottlePrice] = useState('25');
+  const [fineAmount, setFineAmount] = useState('');
+  const [largeToFine, setLargeToFine] = useState(customer.largeBottles);
+  const [smallToFine, setSmallToFine] = useState(customer.smallBottles);
 
-  const totalAmount = (customer.largeBottles * parseFloat(largeBottlePrice || '0')) + (customer.smallBottles * parseFloat(smallBottlePrice || '0'));
+  const totalToFine = largeToFine + smallToFine;
 
   const handleImpose = async () => {
     onError('');
-    const largePriceNum = parseFloat(largeBottlePrice);
-    const smallPriceNum = parseFloat(smallBottlePrice);
+    const amount = parseFloat(fineAmount);
 
-    if (isNaN(largePriceNum) || largePriceNum < 0) {
-      onError('Invalid price for 1L bottles');
+    if (isNaN(amount) || amount <= 0) {
+      onError('Please enter a valid fine amount');
       return;
     }
-    if (isNaN(smallPriceNum) || smallPriceNum < 0) {
-      onError('Invalid price for 500ml bottles');
+    if (totalToFine <= 0) {
+      onError('Select at least 1 bottle to fine');
       return;
     }
 
@@ -862,20 +856,21 @@ function ImposeFineModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerId: customer.id,
-          largeBottlePriceRs: largePriceNum,
-          smallBottlePriceRs: smallPriceNum,
+          fineAmountRs: amount,
+          largeBottlesToFine: largeToFine,
+          smallBottlesToFine: smallToFine,
         }),
       });
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || 'Failed to impose penalty');
+        throw new Error(data.error || 'Failed to impose fine');
       }
 
       const result = await response.json();
       onSuccess(result.message);
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Failed to impose penalty');
+      onError(err instanceof Error ? err.message : 'Failed to impose fine');
     } finally {
       setImposing(false);
     }
@@ -886,7 +881,7 @@ function ImposeFineModal({
       <Card className="w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-xl font-bold text-gray-900 mb-4">Impose Fine</h2>
 
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+        <div className="mb-5 p-4 bg-gray-50 rounded-lg">
           <p className="text-sm text-gray-600 mb-1">Customer</p>
           <p className="font-semibold text-gray-900">{customer.name}</p>
           <p className="text-sm text-gray-500">{customer.phone}</p>
@@ -895,59 +890,85 @@ function ImposeFineModal({
           </p>
         </div>
 
-        <div className="space-y-4 mb-6">
-          {customer.largeBottles > 0 && (
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-700 mb-1">1L Bottles</p>
-                <p className="text-2xl font-bold text-blue-700">{customer.largeBottles}</p>
+        <div className="mb-5">
+          <p className="text-sm font-medium text-gray-700 mb-3">Bottles to Fine</p>
+          <div className="space-y-3">
+            {customer.largeBottles > 0 && (
+              <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <span className="text-sm font-medium text-gray-700">1L Bottles</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setLargeToFine(Math.max(0, largeToFine - 1))}
+                    className="w-8 h-8 rounded-full bg-white border border-gray-300 text-gray-600 font-bold flex items-center justify-center hover:bg-gray-100"
+                  >
+                    −
+                  </button>
+                  <span className="text-lg font-bold text-blue-700 w-12 text-center">
+                    {largeToFine} <span className="text-xs text-gray-400 font-normal">/ {customer.largeBottles}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setLargeToFine(Math.min(customer.largeBottles, largeToFine + 1))}
+                    className="w-8 h-8 rounded-full bg-white border border-gray-300 text-gray-600 font-bold flex items-center justify-center hover:bg-gray-100"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Price per bottle (₹)</label>
-                <input
-                  type="number"
-                  value={largeBottlePrice}
-                  onChange={(e) => setLargeBottlePrice(e.target.value)}
-                  min="0"
-                  step="0.01"
-                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-orange-500 outline-none"
-                />
+            )}
+            {customer.smallBottles > 0 && (
+              <div className="flex items-center justify-between p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <span className="text-sm font-medium text-gray-700">500ml Bottles</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSmallToFine(Math.max(0, smallToFine - 1))}
+                    className="w-8 h-8 rounded-full bg-white border border-gray-300 text-gray-600 font-bold flex items-center justify-center hover:bg-gray-100"
+                  >
+                    −
+                  </button>
+                  <span className="text-lg font-bold text-purple-700 w-12 text-center">
+                    {smallToFine} <span className="text-xs text-gray-400 font-normal">/ {customer.smallBottles}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSmallToFine(Math.min(customer.smallBottles, smallToFine + 1))}
+                    className="w-8 h-8 rounded-full bg-white border border-gray-300 text-gray-600 font-bold flex items-center justify-center hover:bg-gray-100"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-
-          {customer.smallBottles > 0 && (
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-700 mb-1">500ml Bottles</p>
-                <p className="text-2xl font-bold text-purple-700">{customer.smallBottles}</p>
-              </div>
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Price per bottle (₹)</label>
-                <input
-                  type="number"
-                  value={smallBottlePrice}
-                  onChange={(e) => setSmallBottlePrice(e.target.value)}
-                  min="0"
-                  step="0.01"
-                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-orange-500 outline-none"
-                />
-              </div>
-            </div>
-          )}
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">Oldest bottles will be processed first</p>
         </div>
 
-        <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-          <p className="text-sm text-orange-700 font-medium mb-1">Total Penalty Amount</p>
-          <p className="text-3xl font-bold text-orange-900">₹{totalAmount.toFixed(2)}</p>
+        <div className="mb-5">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Fine Amount (₹)</label>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-lg">₹</span>
+            <input
+              type="number"
+              value={fineAmount}
+              onChange={(e) => setFineAmount(e.target.value)}
+              placeholder="Enter fine amount"
+              min="1"
+              step="1"
+              className="w-full pl-10 pr-4 py-3 text-xl font-semibold border-2 border-gray-300 rounded-lg focus:border-orange-500 outline-none"
+              autoFocus
+            />
+          </div>
+          <p className="text-xs text-gray-500 mt-2">This amount will be deducted from the customer's wallet</p>
         </div>
 
         <div className="flex gap-2">
           <Button variant="secondary" onClick={onClose} className="flex-1" disabled={imposing}>
             Cancel
           </Button>
-          <Button onClick={handleImpose} className="flex-1 bg-orange-600 hover:bg-orange-700" disabled={imposing}>
-            {imposing ? 'Imposing...' : 'Impose Fine'}
+          <Button onClick={handleImpose} className="flex-1 bg-orange-600 hover:bg-orange-700" disabled={imposing || !fineAmount || totalToFine <= 0}>
+            {imposing ? 'Imposing...' : `Fine ₹${fineAmount || '0'} for ${totalToFine} bottle${totalToFine !== 1 ? 's' : ''}`}
           </Button>
         </div>
       </Card>
@@ -962,7 +983,7 @@ export const Reports: React.FC = () => {
         <h1 className="text-4xl font-bold text-gray-900 mb-8">Reports</h1>
         <div className="grid md:grid-cols-2 gap-8">
           {[
-            { title: 'Daily Delivery Report', desc: 'All deliveries, status, revenue', color: 'emerald' },
+            { title: 'Daily Delivery Report', desc: 'All deliveries, status, revenue', color: 'green' },
             { title: 'Customer Report', desc: 'Active customers, plans, payments', color: 'blue' },
             { title: 'Revenue Report', desc: 'Daily/Monthly revenue breakdown', color: 'green' },
             { title: 'Bottle Inventory Report', desc: 'Issued, collected, balance', color: 'orange' },
@@ -973,7 +994,7 @@ export const Reports: React.FC = () => {
               </div>
               <h3 className="text-2xl font-bold mb-2">{report.title}</h3>
               <p className="text-gray-600 mb-6">{report.desc}</p>
-              <button className="w-full py-3 bg-emerald-500 text-white rounded-lg font-semibold hover:bg-emerald-600">
+              <button className="w-full py-3 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-800">
                 Export Report
               </button>
             </Card>

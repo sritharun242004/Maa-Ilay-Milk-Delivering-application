@@ -20,7 +20,7 @@ type DashboardData = {
 const activityColors: Record<string, string> = {
   registration: 'blue',
   approval: 'green',
-  payment: 'emerald',
+  payment: 'green',
   bottle: 'orange',
   delivery: 'purple',
 };
@@ -46,7 +46,7 @@ export const AdminDashboard: React.FC = () => {
     return (
       <AdminLayout>
         <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[40vh]">
-          <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
         </div>
       </AdminLayout>
     );
@@ -67,7 +67,7 @@ export const AdminDashboard: React.FC = () => {
       label: "Today's Liters",
       value: `${d.todayLiters}L`,
       subtext: `${d.todayLitersChange >= 0 ? '+' : ''}${d.todayLitersChange}% from yesterday`,
-      subtextColor: d.todayLitersChange >= 0 ? 'text-emerald-600' : 'text-red-600',
+      subtextColor: d.todayLitersChange >= 0 ? 'text-green-800' : 'text-red-600',
       color: 'blue',
       onClick: () => navigate('/admin/today-deliveries'),
       clickable: true,
@@ -76,7 +76,7 @@ export const AdminDashboard: React.FC = () => {
       icon: Package,
       label: 'Bottles Out',
       value: String(d.bottlesOut),
-      subtext: `${d.bottlesCollected} collected`,
+      subtext: `${d.bottlesCollected} collected today`,
       color: 'orange',
       onClick: () => navigate('/admin/bottles-out'),
       clickable: true,
@@ -86,8 +86,8 @@ export const AdminDashboard: React.FC = () => {
       label: "Today's Revenue",
       value: `₹${Number(d.todayRevenueRs).toLocaleString('en-IN')}`,
       subtext: `${d.todayRevenueChange >= 0 ? '+' : ''}${d.todayRevenueChange}% from yesterday`,
-      subtextColor: d.todayRevenueChange >= 0 ? 'text-emerald-600' : 'text-red-600',
-      color: 'emerald',
+      subtextColor: d.todayRevenueChange >= 0 ? 'text-green-800' : 'text-red-600',
+      color: 'green',
       clickable: false,
     },
     {
@@ -116,7 +116,7 @@ export const AdminDashboard: React.FC = () => {
             <Card
               key={index}
               className={`p-6 border-l-4 border-${kpi.color}-500 ${
-                kpi.clickable ? 'cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200' : ''
+                kpi.clickable ? 'cursor-pointer hover:shadow-md transition-shadow duration-200' : ''
               }`}
               onClick={kpi.clickable ? kpi.onClick : undefined}
             >
@@ -140,7 +140,7 @@ export const AdminDashboard: React.FC = () => {
               {d.revenueTrend.map((val, i) => (
                 <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
                   <div
-                    className="w-full bg-emerald-500 rounded-t transition-all hover:bg-emerald-600 cursor-pointer relative"
+                    className="w-full bg-green-500 rounded-t transition-all hover:bg-green-800 cursor-pointer relative"
                     style={{
                       height: val ? `${Math.max(4, (val / maxRevenue) * 160)}px` : '4px',
                     }}

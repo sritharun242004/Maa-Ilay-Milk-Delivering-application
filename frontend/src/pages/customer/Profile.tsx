@@ -168,7 +168,7 @@ export const Profile: React.FC = () => {
     return (
       <CustomerLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-10 h-10 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
         </div>
       </CustomerLayout>
     );
@@ -185,9 +185,9 @@ export const Profile: React.FC = () => {
 
         {/* Notifications */}
         {success && (
-          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
-            <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-            <span className="text-emerald-700">{success}</span>
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-green-800 flex-shrink-0" />
+            <span className="text-green-800">{success}</span>
           </div>
         )}
 
@@ -199,20 +199,20 @@ export const Profile: React.FC = () => {
         )}
 
         {/* Profile Header Card */}
-        <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl p-6 mb-6 text-white">
+        <div className="bg-gray-900 rounded-lg p-6 mb-6 text-white">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold">
               {profile?.name ? getInitials(profile.name) : 'U'}
             </div>
             <div>
               <h2 className="text-2xl font-bold">{profile?.name || 'User'}</h2>
-              <p className="text-emerald-100">{profile?.email}</p>
+              <p className="text-gray-300">{profile?.email}</p>
             </div>
           </div>
         </div>
 
         {/* Personal Information Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
             {!editing ? (
@@ -266,7 +266,7 @@ export const Profile: React.FC = () => {
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${
+                    className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${
                       formErrors.name ? 'border-red-300 bg-red-50' : 'border-gray-200'
                     }`}
                     placeholder="Enter your full name"
@@ -285,7 +285,7 @@ export const Profile: React.FC = () => {
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                    className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${
+                    className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${
                       formErrors.phone ? 'border-red-300 bg-red-50' : 'border-gray-200'
                     }`}
                     placeholder="10-digit mobile number"
@@ -308,7 +308,7 @@ export const Profile: React.FC = () => {
                         type="text"
                         value={formData.addressLine1}
                         onChange={(e) => setFormData({ ...formData, addressLine1: e.target.value })}
-                        className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${
+                        className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${
                           formErrors.addressLine1 ? 'border-red-300 bg-red-50' : 'border-gray-200'
                         }`}
                         placeholder="House/Flat No., Building Name, Street"
@@ -326,7 +326,7 @@ export const Profile: React.FC = () => {
                         type="text"
                         value={formData.addressLine2}
                         onChange={(e) => setFormData({ ...formData, addressLine2: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
                         placeholder="Area, Colony (optional)"
                       />
                     </div>
@@ -339,7 +339,7 @@ export const Profile: React.FC = () => {
                         type="text"
                         value={formData.landmark}
                         onChange={(e) => setFormData({ ...formData, landmark: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
                         placeholder="Near school, temple, etc. (optional)"
                       />
                     </div>
@@ -353,7 +353,7 @@ export const Profile: React.FC = () => {
                           type="text"
                           value={formData.city}
                           onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
                           placeholder="City"
                         />
                       </div>
@@ -365,7 +365,7 @@ export const Profile: React.FC = () => {
                           type="text"
                           value={formData.pincode}
                           onChange={(e) => setFormData({ ...formData, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) })}
-                          className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${
+                          className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${
                             formErrors.pincode ? 'border-red-300 bg-red-50' : 'border-gray-200'
                           }`}
                           placeholder="6-digit pincode"
@@ -383,8 +383,8 @@ export const Profile: React.FC = () => {
               <div className="space-y-6">
                 {/* Name */}
                 <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <User className="w-6 h-6 text-emerald-600" />
+                  <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <User className="w-6 h-6 text-green-800" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-500 mb-1">Full Name</p>

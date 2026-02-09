@@ -3,6 +3,9 @@ import bcrypt from 'bcryptjs';
 import { isAuthenticated, isDelivery } from '../middleware/auth';
 import prisma from '../config/prisma';
 import { calculateDailyPricePaise } from '../config/pricing';
+import { MemoryCache } from '../lib/cache';
+
+const assigneesCache = new MemoryCache();
 import {
   getNowIST,
   getStartOfDayIST,
@@ -197,6 +200,14 @@ router.get('/assignees', isAuthenticated, isDelivery, async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
+    // Check cache (60s TTL per delivery person)
+    const cacheKey = `assignees_${req.user.id}`;
+    const cached = assigneesCache.get(cacheKey);
+    if (cached) {
+      res.set('Cache-Control', 'private, max-age=60');
+      return res.json(cached);
+    }
+
     // Use UTC midnight for DATE column query
     const todayRange = getTodayRangeForDateColumn();
 
@@ -266,7 +277,11 @@ router.get('/assignees', isAuthenticated, isDelivery, async (req, res) => {
         deliveryStatus: deliveryMap.get(c.id) || null,
       };
     });
-    res.json({ assignees: list });
+    const result = { assignees: list };
+    // Cache for 60 seconds
+    assigneesCache.set(cacheKey, result, 60_000);
+    res.set('Cache-Control', 'private, max-age=60');
+    res.json(result);
   } catch (e) {
     console.error('Delivery assignees error:', e);
     res.status(500).json({ error: 'Failed to load assignees' });
@@ -916,6 +931,11 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
       timeout: 10000, // 10 seconds - enough for bottle ledger operations
       isolationLevel: 'Serializable' // Highest isolation for financial operations
     });
+
+    // Invalidate assignees cache for this delivery person
+    if (req.user) {
+      assigneesCache.invalidate(`assignees_${req.user.id}`);
+    }
 
     res.json({ success: true });
   } catch (error) {

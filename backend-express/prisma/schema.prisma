@@ -59,6 +59,7 @@ model BottleLedger {
   @@index([createdAt])
   @@index([customerId])
   @@index([issuedDate])
+  @@index([customerId, createdAt])
 }
 
 model Customer {
@@ -92,6 +93,7 @@ model Customer {
   @@index([deliveryPersonId])
   @@index([phone])
   @@index([status])
+  @@index([deliveryPersonId, status])
 }
 
 model Delivery {
@@ -280,6 +282,7 @@ model WalletTransaction {
   @@index([createdAt])
   @@index([type])
   @@index([walletId])
+  @@index([walletId, createdAt])
 }
 
 enum BottleAction {

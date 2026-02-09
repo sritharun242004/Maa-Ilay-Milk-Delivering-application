@@ -16,6 +16,9 @@ import {
   logPasswordReset,
   logPenaltyImposed,
 } from '../utils/auditLog';
+import { MemoryCache } from '../lib/cache';
+
+const dashboardCache = new MemoryCache();
 
 const router = Router();
 
@@ -41,6 +44,14 @@ function syntheticDashboard() {
 
 router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
   try {
+    // Check cache first (30s TTL)
+    const cacheKey = 'admin_dashboard';
+    const cached = dashboardCache.get(cacheKey);
+    if (cached) {
+      res.set('Cache-Control', 'private, max-age=30');
+      return res.json(cached);
+    }
+
     // Use IST-aware date ranges for DATE column queries
     const todayIST = toISTDateString(new Date());
     const yesterdayIST = toISTDateString(addDaysIST(new Date(), -1));
@@ -68,6 +79,7 @@ router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
       pendingApprovalCount,
       recentCustomers,
       walletTransactions,
+      activeCustomersWithBottles,
     ] = await Promise.all([
       prisma.delivery.findMany({
         where: { deliveryDate: { gte: todayStart, lte: todayEnd } },
@@ -88,6 +100,17 @@ router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
         orderBy: { createdAt: 'asc' },
         select: { type: true, amountPaise: true, createdAt: true },
       }),
+      // Get total bottles in circulation from latest BottleLedger per active customer
+      prisma.customer.findMany({
+        where: { status: 'ACTIVE' },
+        select: {
+          BottleLedger: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { largeBottleBalanceAfter: true, smallBottleBalanceAfter: true },
+          },
+        },
+      }),
     ]);
 
     // --- REPAIR & SYNC ---
@@ -106,8 +129,14 @@ router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
     const deliveredToday = todayDl.filter(d => d.status === 'DELIVERED');
     const todayLiters = deliveredToday.reduce((s, d) => s + d.quantityMl / 1000, 0);
     const todayRev = deliveredToday.reduce((s, d) => s + d.chargePaise, 0);
-    const bottlesOut = todayDl.reduce((s, d) => s + (d.quantityMl >= 1000 ? Math.floor(d.quantityMl / 1000) : 0) + (d.quantityMl % 1000 >= 500 ? 1 : 0), 0);
-    const bottlesCollected = todayDl.reduce((s, d) => s + d.largeBottlesCollected + d.smallBottlesCollected, 0);
+
+    // Bottles in circulation: sum of latest ledger balances for all active customers
+    const bottlesOut = activeCustomersWithBottles.reduce((s, c) => {
+      const ledger = c.BottleLedger[0];
+      if (!ledger) return s;
+      return s + (ledger.largeBottleBalanceAfter || 0) + (ledger.smallBottleBalanceAfter || 0);
+    }, 0);
+    const bottlesCollected = todayDl.reduce((s, d) => s + (d.largeBottlesCollected || 0) + (d.smallBottlesCollected || 0), 0);
 
     // KPI Calc: Yesterday
     const deliveredYesterday = yesterdayDl.filter(d => d.status === 'DELIVERED');
@@ -142,7 +171,7 @@ router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
       return { text: `New customer registration: ${c.name}`, time: timeStr, type: 'registration' };
     });
 
-    res.json({
+    const dashboardData = {
       todayLiters: Math.round(todayLiters * 10) / 10,
       todayLitersChange: litersChange,
       bottlesOut,
@@ -152,7 +181,12 @@ router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
       pendingApprovals: pendingApprovalCount,
       revenueTrend,
       recentActivities: activities.length > 0 ? activities : syntheticDashboard().recentActivities,
-    });
+    };
+
+    // Cache for 30 seconds
+    dashboardCache.set(cacheKey, dashboardData, 30_000);
+    res.set('Cache-Control', 'private, max-age=30');
+    res.json(dashboardData);
   } catch (e) {
     console.error('Admin dashboard error:', e);
     res.json(syntheticDashboard());
@@ -193,6 +227,117 @@ router.get('/today-deliveries', isAuthenticated, isAdmin, async (req, res) => {
   } catch (e) {
     console.error('Today deliveries error:', e);
     res.status(500).json({ error: 'Failed to fetch deliveries', deliveries: [] });
+  }
+});
+
+// Admin Deliveries — master data with filters and pagination
+router.get('/deliveries-history', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(10, parseInt(req.query.limit as string) || 50));
+    const skip = (page - 1) * limit;
+
+    // Filters
+    const dateStr = req.query.date as string;
+    const dateFrom = req.query.dateFrom as string;
+    const dateTo = req.query.dateTo as string;
+    const deliveryPersonId = req.query.deliveryPersonId as string;
+    const status = req.query.status as string;
+    const search = req.query.search as string;
+
+    // Build where clause
+    const where: any = {};
+
+    // Date filter — single date or range
+    if (dateStr) {
+      const range = getDateRangeForDateColumn(dateStr);
+      where.deliveryDate = { gte: range.start, lte: range.end };
+    } else if (dateFrom || dateTo) {
+      where.deliveryDate = {};
+      if (dateFrom) {
+        const fromRange = getDateRangeForDateColumn(dateFrom);
+        where.deliveryDate.gte = fromRange.start;
+      }
+      if (dateTo) {
+        const toRange = getDateRangeForDateColumn(dateTo);
+        where.deliveryDate.lte = toRange.end;
+      }
+    } else {
+      // Default: today
+      const todayIST = toISTDateString(new Date());
+      const range = getDateRangeForDateColumn(todayIST);
+      where.deliveryDate = { gte: range.start, lte: range.end };
+    }
+
+    if (deliveryPersonId) {
+      where.deliveryPersonId = deliveryPersonId;
+    }
+
+    if (status && status !== 'ALL') {
+      where.status = status;
+    }
+
+    if (search) {
+      where.Customer = {
+        name: { contains: search, mode: 'insensitive' },
+      };
+    }
+
+    const [deliveries, total, aggregates, deliveryPersons] = await Promise.all([
+      prisma.delivery.findMany({
+        where,
+        include: {
+          Customer: { select: { name: true, phone: true } },
+          DeliveryPerson: { select: { name: true } },
+        },
+        orderBy: [{ deliveryDate: 'desc' }, { deliveredAt: 'desc' }],
+        skip,
+        take: limit,
+      }),
+      prisma.delivery.count({ where }),
+      // Aggregate stats for the full filtered dataset
+      prisma.delivery.aggregate({
+        where,
+        _sum: { quantityMl: true, largeBottles: true, smallBottles: true },
+      }),
+      // Delivery persons list for filter dropdown
+      prisma.deliveryPerson.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+
+    const formatted = deliveries.map(d => ({
+      id: d.id,
+      date: d.deliveryDate,
+      customerName: d.Customer.name,
+      customerPhone: d.Customer.phone,
+      quantityMl: d.quantityMl,
+      liters: d.quantityMl / 1000,
+      largeBottles: d.largeBottles,
+      smallBottles: d.smallBottles,
+      deliveryPersonName: d.DeliveryPerson?.name || 'Unassigned',
+      status: d.status,
+      largeBottlesCollected: d.largeBottlesCollected,
+      smallBottlesCollected: d.smallBottlesCollected,
+      deliveredAt: d.deliveredAt,
+    }));
+
+    res.json({
+      deliveries: formatted,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      totalLiters: Math.round((aggregates._sum.quantityMl || 0) / 100) / 10,
+      total1LBottles: aggregates._sum.largeBottles || 0,
+      total500mlBottles: aggregates._sum.smallBottles || 0,
+      deliveryPersons,
+    });
+  } catch (e) {
+    console.error('Admin deliveries history error:', e);
+    res.status(500).json({ error: 'Failed to fetch deliveries' });
   }
 });
 
@@ -1079,8 +1224,7 @@ router.get('/penalties', isAuthenticated, isAdmin, async (req, res) => {
     // Add cache headers - penalties change less frequently
     res.set('Cache-Control', 'private, max-age=60'); // 1 minute cache
     res.json({
-      totalPendingRs: stats.totalPendingRs,
-      collectedThisMonthRs: stats.collectedThisMonthRs,
+      totalPendingBottles: stats.totalPendingBottles,
       flaggedCustomersCount: stats.flaggedCustomersCount,
       flaggedCustomers: flaggedCustomers.map(c => ({
         id: c.id,
@@ -1101,21 +1245,24 @@ router.get('/penalties', isAuthenticated, isAdmin, async (req, res) => {
   }
 });
 
-// Manually impose penalty on a customer
+// Manually impose fine on a customer for unreturned bottles
 router.post('/penalties/impose', isAuthenticated, isAdmin, async (req, res) => {
   try {
-    const { customerId, largeBottlePriceRs, smallBottlePriceRs } = req.body;
+    const { customerId, fineAmountRs, largeBottlesToFine, smallBottlesToFine } = req.body;
 
-    if (!customerId || largeBottlePriceRs === undefined || smallBottlePriceRs === undefined) {
+    if (!customerId || !fineAmountRs || fineAmountRs <= 0) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Convert rupees to paise
-    const largeBottlePricePaise = Math.round(largeBottlePriceRs * 100);
-    const smallBottlePricePaise = Math.round(smallBottlePriceRs * 100);
+    const fineAmountPaise = Math.round(fineAmountRs * 100);
 
     const { imposePenaltyOnCustomer } = await import('../services/penaltyService');
-    const result = await imposePenaltyOnCustomer(customerId, largeBottlePricePaise, smallBottlePricePaise);
+    const result = await imposePenaltyOnCustomer(
+      customerId,
+      fineAmountPaise,
+      largeBottlesToFine ?? 0,
+      smallBottlesToFine ?? 0
+    );
 
     if (result.success && req.user) {
       // Audit log
@@ -1123,8 +1270,9 @@ router.post('/penalties/impose', isAuthenticated, isAdmin, async (req, res) => {
         req.user.id,
         customerId,
         {
-          largeBottlePriceRs,
-          smallBottlePriceRs,
+          fineAmountRs,
+          largeBottlesFined: largeBottlesToFine ?? 0,
+          smallBottlesFined: smallBottlesToFine ?? 0,
           totalChargedRs: result.totalCharged,
         },
         req
@@ -1140,7 +1288,7 @@ router.post('/penalties/impose', isAuthenticated, isAdmin, async (req, res) => {
     }
   } catch (e) {
     console.error('Admin impose penalty error:', e);
-    res.status(500).json({ error: 'Failed to impose penalty' });
+    res.status(500).json({ error: 'Failed to impose fine' });
   }
 });
 

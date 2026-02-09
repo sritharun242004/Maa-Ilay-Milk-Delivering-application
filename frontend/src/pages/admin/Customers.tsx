@@ -274,13 +274,13 @@ export const AdminCustomers: React.FC = () => {
                 placeholder="Search customers..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+                className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
               />
             </div>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+              className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
             >
               <option value="all">All Status</option>
               <option value="VISITOR">Visitor</option>
@@ -329,7 +329,7 @@ export const AdminCustomers: React.FC = () => {
                   {customers.map((customer) => (
                     <tr
                       key={customer.id}
-                      className="border-b border-gray-200 hover:bg-emerald-50/50 cursor-pointer transition-colors"
+                      className="border-b border-gray-200 hover:bg-green-50/50 cursor-pointer transition-colors"
                       onClick={() => setDetailCustomerId(customer.id)}
                     >
                       <td className="py-4 px-4 font-medium text-gray-900">{customer.name}</td>
@@ -427,7 +427,7 @@ export const AdminCustomers: React.FC = () => {
           aria-label="Customer profile"
         >
           <div
-            className="w-full max-w-lg bg-white shadow-2xl overflow-y-auto"
+            className="w-full max-w-lg bg-white shadow-sm overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
@@ -443,14 +443,14 @@ export const AdminCustomers: React.FC = () => {
             <div className="p-6">
               {detailLoading && (
                 <div className="flex justify-center py-12">
-                  <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-10 h-10 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
               {!detailLoading && detailData && (
                 <div className="space-y-6">
                   <Card className="p-4">
                     <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <User className="w-5 h-5 text-emerald-600" /> Personal info
+                      <User className="w-5 h-5 text-green-800" /> Personal info
                     </h3>
                     <dl className="grid grid-cols-1 gap-2 text-sm">
                       <div><dt className="text-gray-500">Name</dt><dd className="font-medium">{detailData.customer.name}</dd></div>
@@ -463,9 +463,9 @@ export const AdminCustomers: React.FC = () => {
                   </Card>
                   <Card className="p-4">
                     <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <Wallet className="w-5 h-5 text-emerald-600" /> Wallet
+                      <Wallet className="w-5 h-5 text-green-800" /> Wallet
                     </h3>
-                    <p className="text-2xl font-bold text-emerald-600">₹{detailData.wallet?.balanceRs ?? '0.00'}</p>
+                    <p className="text-2xl font-bold text-green-800">₹{detailData.wallet?.balanceRs ?? '0.00'}</p>
                     {detailData.lastTransaction && (
                       <div className="mt-3 pt-3 border-t border-gray-100">
                         <p className="text-xs text-gray-500 mb-1">Last transaction</p>
@@ -476,7 +476,7 @@ export const AdminCustomers: React.FC = () => {
                   </Card>
                   <Card className="p-4">
                     <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <Receipt className="w-5 h-5 text-emerald-600" /> Subscription
+                      <Receipt className="w-5 h-5 text-green-800" /> Subscription
                     </h3>
                     {detailData.subscription ? (
                       <dl className="grid grid-cols-1 gap-2 text-sm">
@@ -491,7 +491,7 @@ export const AdminCustomers: React.FC = () => {
                   <Card className="p-4">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                        <Calendar className="w-5 h-5 text-emerald-600" /> Delivery Calendar
+                        <Calendar className="w-5 h-5 text-green-800" /> Delivery Calendar
                       </h3>
                       <div className="flex items-center gap-2">
                         <button
@@ -545,7 +545,7 @@ export const AdminCustomers: React.FC = () => {
                           let title = `Day ${d}`;
                           const isClickable = status === 'DELIVERED' || status === 'NOT_DELIVERED' || status === 'PAUSED';
 
-                          if (status === 'DELIVERED') bg = 'bg-emerald-200 text-emerald-800';
+                          if (status === 'DELIVERED') bg = 'bg-green-200 text-green-900';
                           else if (status === 'PAUSED') bg = 'bg-orange-200 text-orange-800';
                           else if (status === 'NOT_DELIVERED') bg = 'bg-red-200 text-red-800';
                           else if (mod) bg = 'bg-blue-200 text-blue-800';
@@ -556,7 +556,7 @@ export const AdminCustomers: React.FC = () => {
                           cells.push(
                             <div
                               key={`d-${d}`}
-                              className={`aspect-square rounded flex items-center justify-center font-medium ${bg} relative ${isClickable ? 'cursor-pointer hover:ring-2 hover:ring-emerald-500 transition-all' : ''}`}
+                              className={`aspect-square rounded flex items-center justify-center font-medium ${bg} relative ${isClickable ? 'cursor-pointer hover:ring-2 hover:ring-green-500 transition-all' : ''}`}
                               title={title}
                               onClick={isClickable ? () => setSelectedDeliveryDate(dateStr) : undefined}
                             >
@@ -590,7 +590,7 @@ export const AdminCustomers: React.FC = () => {
               <select
                 value={reassignPersonId}
                 onChange={(e) => setReassignPersonId(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
               >
                 <option value="">— Unassign —</option>
                 {staffList.map((s) => (
@@ -606,7 +606,7 @@ export const AdminCustomers: React.FC = () => {
                   value={deliveryStartDate}
                   onChange={(e) => setDeliveryStartDate(e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
                 />
                 <p className="text-xs text-gray-500 mt-1">First delivery will be scheduled on this date</p>
               </div>
@@ -646,15 +646,15 @@ export const AdminCustomers: React.FC = () => {
 
             {deliveryDetailsLoading && (
               <div className="flex justify-center py-12">
-                <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                <div className="w-10 h-10 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
               </div>
             )}
 
             {!deliveryDetailsLoading && deliveryDetails && (
               <div className="space-y-4">
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                  <p className="text-sm text-emerald-700 font-medium mb-1">Date</p>
-                  <p className="text-lg font-bold text-emerald-900">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <p className="text-sm text-green-800 font-medium mb-1">Date</p>
+                  <p className="text-lg font-bold text-green-950">
                     {new Date(selectedDeliveryDate + 'T12:00:00').toLocaleDateString('en-IN', {
                       weekday: 'long',
                       day: 'numeric',
@@ -710,9 +710,9 @@ export const AdminCustomers: React.FC = () => {
                       </p>
                     </div>
 
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                      <p className="text-sm text-emerald-700 font-medium mb-2">Amount Charged</p>
-                      <p className="text-2xl font-bold text-emerald-900">₹{deliveryDetails.chargeRs}</p>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <p className="text-sm text-green-800 font-medium mb-2">Amount Charged</p>
+                      <p className="text-2xl font-bold text-green-950">₹{deliveryDetails.chargeRs}</p>
                     </div>
 
                     {deliveryDetails.deliveredAt && (

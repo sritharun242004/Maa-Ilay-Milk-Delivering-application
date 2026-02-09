@@ -145,7 +145,7 @@ export const TodayDeliveries: React.FC = () => {
     <DeliveryLayout>
       <div className="max-w-7xl mx-auto py-6 px-4">
         {/* Header Card with Date Navigation */}
-        <Card className="mb-6 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white overflow-hidden">
+        <div className="mb-6 bg-green-800 text-white overflow-hidden rounded-lg shadow-sm">
           <div className="p-6">
             {/* Date Navigation */}
             <div className="flex items-center justify-between mb-6">
@@ -158,11 +158,11 @@ export const TodayDeliveries: React.FC = () => {
               </button>
 
               <div className="text-center">
-                <p className="text-emerald-100 text-sm mb-1">Deliveries for</p>
+                <p className="text-green-200 text-sm mb-1">Deliveries for</p>
                 <h1 className="text-2xl md:text-3xl font-bold">
                   {formatDateDisplay(selectedDate)}
                 </h1>
-                <p className="text-emerald-100 text-sm mt-1">
+                <p className="text-green-200 text-sm mt-1">
                   {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-IN', {
                     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
                   })}
@@ -195,7 +195,7 @@ export const TodayDeliveries: React.FC = () => {
               <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
                 <div className="flex items-center gap-2 mb-1">
                   <Package className="w-4 h-4" />
-                  <p className="text-emerald-100 text-xs">Total</p>
+                  <p className="text-green-200 text-xs">Total</p>
                 </div>
                 <p className="text-3xl font-bold">{today?.total ?? 0}</p>
               </div>
@@ -203,7 +203,7 @@ export const TodayDeliveries: React.FC = () => {
               <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
                 <div className="flex items-center gap-2 mb-1">
                   <CheckCircle className="w-4 h-4" />
-                  <p className="text-emerald-100 text-xs">Completed</p>
+                  <p className="text-green-200 text-xs">Completed</p>
                 </div>
                 <p className="text-3xl font-bold">{today?.completed ?? 0}</p>
               </div>
@@ -211,18 +211,18 @@ export const TodayDeliveries: React.FC = () => {
               <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
                 <div className="flex items-center gap-2 mb-1">
                   <Clock className="w-4 h-4" />
-                  <p className="text-emerald-100 text-xs">Pending</p>
+                  <p className="text-green-200 text-xs">Pending</p>
                 </div>
                 <p className="text-3xl font-bold">{today?.pending ?? 0}</p>
               </div>
 
               <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-                <p className="text-emerald-100 text-xs mb-1">Liters to Load</p>
+                <p className="text-green-200 text-xs mb-1">Liters to Load</p>
                 <p className="text-3xl font-bold">{today?.totalLiters ?? 0}L</p>
               </div>
 
               <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-                <p className="text-emerald-100 text-xs mb-1">Bottles</p>
+                <p className="text-green-200 text-xs mb-1">Bottles</p>
                 <p className="text-xl font-bold">
                   {today?.total1LBottles ?? 0}×1L, {today?.total500mlBottles ?? 0}×500ml
                 </p>
@@ -231,12 +231,12 @@ export const TodayDeliveries: React.FC = () => {
 
             {/* Delivery Person Info */}
             <div className="mt-6 pt-6 border-t border-white/20">
-              <p className="text-emerald-100 text-sm">Delivery Person</p>
+              <p className="text-green-200 text-sm">Delivery Person</p>
               <p className="text-xl font-semibold">{profile.name}</p>
-              <p className="text-emerald-100">+91 {profile.phone}</p>
+              <p className="text-green-200">+91 {profile.phone}</p>
             </div>
           </div>
-        </Card>
+        </div>
 
         {/* Pending Deliveries Section */}
         {scheduledDeliveries.length > 0 && (
@@ -266,9 +266,9 @@ export const TodayDeliveries: React.FC = () => {
         {/* Completed Deliveries Section */}
         {completedDeliveries.length > 0 && (
           <Card className="mb-6">
-            <div className="p-4 bg-emerald-50 border-b border-emerald-100">
+            <div className="p-4 bg-green-50 border-b border-green-100">
               <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-emerald-600" />
+                <CheckCircle className="w-5 h-5 text-green-800" />
                 Completed Deliveries ({completedDeliveries.length})
               </h2>
             </div>
@@ -338,8 +338,8 @@ const DeliveryCard: React.FC<DeliveryCardProps> = ({
         {/* Left: Customer Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-2">
-            <div className="flex-shrink-0 w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-              <span className="text-emerald-700 font-bold text-sm">{index + 1}</span>
+            <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+              <span className="text-green-800 font-bold text-sm">{index + 1}</span>
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="text-lg font-semibold text-gray-900 truncate">{customer.name}</h3>
@@ -353,7 +353,7 @@ const DeliveryCard: React.FC<DeliveryCardProps> = ({
             <div className="flex flex-wrap items-center gap-3 mt-2">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-500">Plan:</span>
-                <Badge variant="default" className="bg-emerald-100 text-emerald-700">
+                <Badge variant="default" className="bg-green-100 text-green-800">
                   {quantityLabel(delivery.quantityMl)}
                 </Badge>
               </div>
@@ -401,7 +401,7 @@ const DeliveryCard: React.FC<DeliveryCardProps> = ({
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
               isCompleted
                 ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                : 'bg-emerald-500 text-white hover:bg-emerald-600'
+                : 'bg-green-500 text-white hover:bg-green-800'
             }`}
           >
             <Eye className="w-4 h-4" />

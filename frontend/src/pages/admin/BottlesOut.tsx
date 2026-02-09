@@ -35,7 +35,7 @@ export const BottlesOut: React.FC = () => {
         <div className="mb-8">
           <button
             onClick={() => navigate('/admin/dashboard')}
-            className="flex items-center gap-2 text-emerald-600 hover:text-emerald-700 mb-4"
+            className="flex items-center gap-2 text-green-800 hover:text-green-800 mb-4"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Dashboard
@@ -64,7 +64,7 @@ export const BottlesOut: React.FC = () => {
 
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-10 h-10 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : bottlesData.length === 0 ? (
           <Card className="p-12 text-center">

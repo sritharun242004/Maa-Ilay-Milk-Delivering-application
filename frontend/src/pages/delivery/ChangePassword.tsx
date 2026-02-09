@@ -47,10 +47,10 @@ export const DeliveryChangePassword: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-white flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md p-8">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
+          <div className="w-12 h-12 bg-green-800 rounded-xl flex items-center justify-center">
             <Droplet className="w-6 h-6 text-white" />
           </div>
           <div>
@@ -69,7 +69,7 @@ export const DeliveryChangePassword: React.FC = () => {
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               required
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
               placeholder="Enter the password shared by admin"
               autoComplete="current-password"
             />
@@ -82,7 +82,7 @@ export const DeliveryChangePassword: React.FC = () => {
               onChange={(e) => setNewPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
               placeholder="Choose your new password"
               autoComplete="new-password"
             />
@@ -94,7 +94,7 @@ export const DeliveryChangePassword: React.FC = () => {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-emerald-500 outline-none"
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
               placeholder="Confirm new password"
               autoComplete="new-password"
             />

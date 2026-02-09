@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { CustomerLayout } from '../../components/layouts/CustomerLayout';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
+import { formatDateLocal } from '../../lib/date';
 import { getApiUrl } from '../../config/api';
 import {
   Wallet,
@@ -131,7 +132,6 @@ export const CustomerDashboard: React.FC = () => {
       label: 'Wallet Balance',
       value: data ? `₹${Number(data.customer.walletBalanceRs).toLocaleString('en-IN')}` : '—',
       subtext: data ? lastTopUp(data.recentTransactions) : '—',
-      color: 'emerald',
     },
     {
       icon: CheckCircle,
@@ -139,7 +139,6 @@ export const CustomerDashboard: React.FC = () => {
       value: subscriptionLabel,
       badge: subscriptionBadge,
       subtext: subscriptionSubtext,
-      color: 'emerald',
     },
     {
       icon: Truck,
@@ -152,14 +151,12 @@ export const CustomerDashboard: React.FC = () => {
         : isPendingApproval
         ? 'Waiting for admin approval'
         : '—',
-      color: 'blue',
     },
     {
       icon: Calendar,
       label: 'Pause Days',
       value: `${pauseDaysUsed}`,
       subtext: 'Days paused this month',
-      color: 'orange',
     },
   ];
 
@@ -168,35 +165,30 @@ export const CustomerDashboard: React.FC = () => {
       icon: Package,
       title: 'Manage Subscription',
       description: 'Change your plan or daily quantity',
-      gradient: 'from-emerald-500 to-emerald-600',
       path: '/customer/subscription',
     },
     {
       icon: Calendar,
       title: 'Pause/Block Dates',
       description: 'Manage your delivery calendar',
-      gradient: 'from-blue-500 to-blue-600',
       path: '/customer/calendar',
     },
     {
       icon: CreditCard,
       title: 'Top-up Wallet',
       description: 'Add money to your wallet',
-      gradient: 'from-purple-500 to-purple-600',
       path: '/customer/wallet',
     },
     {
       icon: Clock,
       title: 'View History',
       description: 'See your delivery and bottle records',
-      gradient: 'from-orange-500 to-orange-600',
       path: '/customer/history',
     },
     {
       icon: HelpCircle,
       title: 'Get Support',
       description: 'Contact us or view FAQs',
-      gradient: 'from-teal-500 to-teal-600',
       path: '/customer/support',
     },
   ];
@@ -204,8 +196,8 @@ export const CustomerDashboard: React.FC = () => {
   if (loading) {
     return (
       <CustomerLayout>
-        <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
-          <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+        <div className="max-w-5xl mx-auto flex items-center justify-center min-h-[400px]">
+          <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
         </div>
       </CustomerLayout>
     );
@@ -214,7 +206,7 @@ export const CustomerDashboard: React.FC = () => {
   if (error || !data) {
     return (
       <CustomerLayout>
-        <div className="max-w-7xl mx-auto py-12 text-center text-gray-600">
+        <div className="max-w-5xl mx-auto py-12 text-center text-gray-500 text-sm">
           {error || 'No dashboard data.'}
         </div>
       </CustomerLayout>
@@ -223,102 +215,96 @@ export const CustomerDashboard: React.FC = () => {
 
   return (
     <CustomerLayout>
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Dashboard</h1>
-          <p className="text-gray-600">Welcome back{data.customer?.name ? `, ${data.customer.name}` : ''}! Here's your milk subscription overview.</p>
+      <div className="max-w-5xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold text-gray-900 mb-1">Dashboard</h1>
+          <p className="text-sm text-gray-500">Welcome back{data.customer?.name ? `, ${data.customer.name}` : ''}. Here's your milk subscription overview.</p>
         </div>
 
-        {/* Pending Payment Notice - New user hasn't subscribed yet */}
+        {/* Pending Payment Notice */}
         {data.customer.status === 'PENDING_PAYMENT' && (
-          <div className="bg-blue-50 border-2 border-blue-400 rounded-xl p-8 mb-8 flex gap-4">
-            <Info className="w-8 h-8 text-blue-600 flex-shrink-0 mt-1" />
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-5 mb-6 flex gap-3">
+            <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">📝 Complete Your Subscription</h3>
-              <p className="text-gray-700 mb-2 text-lg">
-                Welcome! You've completed your profile. Now let's set up your milk subscription.
-              </p>
-              <p className="text-gray-600 mb-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-1">Complete Your Subscription</h3>
+              <p className="text-sm text-gray-600 mb-3">
                 Select your daily milk quantity and start receiving fresh milk at your doorstep every morning at 6 AM.
               </p>
               <Link
                 to="/customer/subscription"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-800 hover:bg-green-900 text-white rounded-lg text-sm font-medium transition-colors"
               >
-                Start Subscription Now <ArrowRight className="w-5 h-5" />
+                Start Subscription <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
           </div>
         )}
 
-
-        {!hasSubscription && (
-          <div className="bg-orange-50 border border-orange-200 rounded-xl p-6 mb-8 flex gap-4">
-            <Info className="w-6 h-6 text-orange-600 flex-shrink-0 mt-1" />
+        {!hasSubscription && !isPendingPayment && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-5 mb-6 flex gap-3">
+            <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Start Your Subscription</h3>
-              <p className="text-gray-700 mb-3">
-                You don't have an active subscription yet. Subscribe now to start receiving fresh milk at your doorstep every morning!
+              <h3 className="text-sm font-semibold text-gray-900 mb-1">Start Your Subscription</h3>
+              <p className="text-sm text-gray-600 mb-3">
+                You don't have an active subscription yet. Subscribe now to start receiving fresh milk every morning.
               </p>
               <Link
                 to="/customer/subscription"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold transition-colors"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-800 hover:bg-green-900 text-white rounded-lg text-sm font-medium transition-colors"
               >
-                Subscribe Now <ArrowRight className="w-4 h-4" />
+                Subscribe Now <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
           </div>
         )}
 
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-8 flex gap-4">
-          <Info className="w-6 h-6 text-blue-600 flex-shrink-0 mt-1" />
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Important Information</h3>
-            <ul className="list-disc pl-4 space-y-1 text-gray-700">
-              <li>Delivery happens at 6 AM every day</li>
-              <li>Cutoff time for changes is 5 PM previous day</li>
-              <li>You can pause delivery anytime from the Calendar page</li>
-              <li>Payment date is the <strong>5th of every month</strong> — full month charge in ₹</li>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 flex gap-3">
+          <Info className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-gray-600">
+            <p className="font-medium text-gray-700 mb-1">Important</p>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>Delivery at 6 AM daily</li>
+              <li>Cutoff for changes: 5 PM previous day</li>
+              <li>Pause delivery anytime from Calendar</li>
+              <li>Payment on the <strong>5th of every month</strong></li>
             </ul>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-4 grid-cols-1 gap-6 mb-8">
+        <div className="grid md:grid-cols-4 grid-cols-2 gap-4 mb-8">
           {kpiData.map((kpi, index) => (
-            <Card key={index} className="p-6 border-l-4 border-emerald-500">
-              <div className="flex justify-between items-start mb-4">
-                <div className={`w-12 h-12 bg-${kpi.color}-100 rounded-xl flex items-center justify-center`}>
-                  <kpi.icon className={`w-6 h-6 text-${kpi.color}-600`} />
+            <Card key={index} className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <kpi.icon className="w-4 h-4 text-gray-600" />
                 </div>
               </div>
-              <p className="text-sm text-gray-600 font-medium mb-1">{kpi.label}</p>
+              <p className="text-xs text-gray-500 font-medium mb-0.5">{kpi.label}</p>
               <div className="flex items-center gap-2">
-                <p className={`${kpi.value === 'Waiting for Approval' ? 'text-xl' : 'text-3xl'} font-bold text-gray-900`}>{kpi.value}</p>
+                <p className={`${kpi.value === 'Waiting for Approval' ? 'text-base' : 'text-xl'} font-semibold text-gray-900`}>{kpi.value}</p>
                 {kpi.badge && <Badge variant={kpi.badge as any}>{kpi.value}</Badge>}
               </div>
-              {kpi.subtext && <p className="text-xs text-gray-500 mt-1">{kpi.subtext}</p>}
+              {kpi.subtext && <p className="text-xs text-gray-400 mt-0.5">{kpi.subtext}</p>}
             </Card>
           ))}
         </div>
 
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Quick Actions</h2>
-        <div className="grid md:grid-cols-3 grid-cols-1 gap-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+        <div className="grid md:grid-cols-3 grid-cols-1 gap-3">
           {quickActions.map((action, index) => (
             <Link key={index} to={action.path} className="block">
               <Card
                 hover
-                className="p-8 border-2 border-gray-200 hover:border-emerald-200 cursor-pointer group"
+                className="p-5 cursor-pointer group"
               >
-                <div
-                  className={`w-16 h-16 bg-gradient-to-br ${action.gradient} rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
-                >
-                  <action.icon className="w-8 h-8 text-white" />
+                <div className="w-9 h-9 bg-green-50 rounded-lg flex items-center justify-center mb-3">
+                  <action.icon className="w-4 h-4 text-green-800" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">{action.title}</h3>
-                <p className="text-gray-600 mb-4">{action.description}</p>
-                <div className="flex items-center text-emerald-600 font-semibold group-hover:gap-3 gap-2 transition-all">
+                <h3 className="text-sm font-semibold text-gray-900 mb-1">{action.title}</h3>
+                <p className="text-xs text-gray-500 mb-3">{action.description}</p>
+                <div className="flex items-center text-green-800 text-xs font-medium gap-1">
                   View
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-3 h-3" />
                 </div>
               </Card>
             </Link>

@@ -67,7 +67,7 @@ export const PaymentCallback: React.FC = () => {
         <Card className="p-12 text-center">
           {status === 'verifying' && (
             <>
-              <Loader className="w-16 h-16 text-emerald-500 mx-auto mb-6 animate-spin" />
+              <Loader className="w-16 h-16 text-green-500 mx-auto mb-6 animate-spin" />
               <h1 className="text-3xl font-bold text-gray-900 mb-4">Verifying Payment</h1>
               <p className="text-gray-600">Please wait while we confirm your payment...</p>
             </>
@@ -75,15 +75,15 @@ export const PaymentCallback: React.FC = () => {
 
           {status === 'success' && (
             <>
-              <CheckCircle className="w-20 h-20 text-emerald-500 mx-auto mb-6" />
+              <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6" />
               <h1 className="text-3xl font-bold text-gray-900 mb-4">Payment Successful!</h1>
               <p className="text-lg text-gray-700 mb-6">{message}</p>
 
-              <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-6 mb-8">
+              <div className="bg-green-50 border-2 border-green-200 rounded-xl p-6 mb-8">
                 <div className="grid grid-cols-2 gap-6">
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Amount Added</p>
-                    <p className="text-2xl font-bold text-emerald-600">₹{amount.toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-green-800">₹{amount.toFixed(2)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600 mb-1">New Balance</p>

@@ -106,7 +106,7 @@ export const Subscription: React.FC = () => {
     return (
       <CustomerLayout>
         <div className="max-w-6xl mx-auto flex items-center justify-center min-h-[400px]">
-          <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
         </div>
       </CustomerLayout>
     );
@@ -124,14 +124,14 @@ export const Subscription: React.FC = () => {
 
         {/* Success Message */}
         {success && (
-          <Card className="p-6 mb-8 border-2 border-emerald-500 bg-emerald-50">
+          <Card className="p-6 mb-8 border-2 border-green-500 bg-green-50">
             <div className="flex items-center gap-3">
-              <Check className="w-6 h-6 text-emerald-600" />
+              <Check className="w-6 h-6 text-green-800" />
               <div>
-                <p className="font-semibold text-emerald-900">
+                <p className="font-semibold text-green-950">
                   {hasSubscription ? 'Subscription updated successfully!' : 'Subscription started successfully!'}
                 </p>
-                <p className="text-sm text-emerald-700">
+                <p className="text-sm text-green-800">
                   Your daily delivery quantity has been updated.
                 </p>
               </div>
@@ -151,7 +151,7 @@ export const Subscription: React.FC = () => {
 
         {/* Current Subscription Info */}
         {hasSubscription && subscription && (
-          <Card variant="gradient" className="p-8 mb-8 border-2 border-emerald-200">
+          <Card variant="gradient" className="p-8 mb-8 border-2 border-green-200">
             <Badge
               variant={
                 subscription.subscriptionStatusDisplay === 'ACTIVE'
@@ -175,7 +175,7 @@ export const Subscription: React.FC = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600 mb-1">Daily Cost</p>
-                <p className="text-2xl font-bold text-emerald-600">₹{subscription.dailyPriceRs}/day</p>
+                <p className="text-2xl font-bold text-green-800">₹{subscription.dailyPriceRs}/day</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600 mb-1">Status</p>
@@ -273,14 +273,14 @@ export const Subscription: React.FC = () => {
                 onClick={() => setSelectedQuantity(opt)}
                 className={`p-6 rounded-xl border-2 text-center transition-all ${
                   selectedQuantity?.liters === opt.liters
-                    ? 'border-emerald-500 bg-emerald-50 shadow-md ring-2 ring-emerald-200'
-                    : 'border-gray-200 hover:border-emerald-300 bg-white'
+                    ? 'border-green-500 bg-green-50 shadow-md ring-2 ring-green-200'
+                    : 'border-gray-200 hover:border-green-300 bg-white'
                 }`}
               >
                 <p className="text-2xl font-bold text-gray-900">{opt.label}</p>
-                <p className="text-lg font-semibold text-emerald-600 mt-1">₹{opt.dailyRs}/day</p>
+                <p className="text-lg font-semibold text-green-800 mt-1">₹{opt.dailyRs}/day</p>
                 {selectedQuantity?.liters === opt.liters && (
-                  <Check className="w-5 h-5 text-emerald-600 mx-auto mt-2" />
+                  <Check className="w-5 h-5 text-green-800 mx-auto mt-2" />
                 )}
               </button>
             ))}
@@ -339,31 +339,31 @@ export const Subscription: React.FC = () => {
             <div className="px-6 pb-6 pt-4">
               <ul className="space-y-3 text-gray-700">
                 <li className="flex items-start gap-2">
-                  <span className="text-emerald-600 font-bold">•</span>
+                  <span className="text-green-800 font-bold">•</span>
                   <span>Daily delivery at <strong>6:00 AM</strong> every morning</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-emerald-600 font-bold">•</span>
+                  <span className="text-green-800 font-bold">•</span>
                   <span>Cutoff time for changes: <strong>5:00 PM</strong> previous day</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-emerald-600 font-bold">•</span>
+                  <span className="text-green-800 font-bold">•</span>
                   <span>Available quantities: <strong>500ml to 2.5L</strong> per day</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-emerald-600 font-bold">•</span>
+                  <span className="text-green-800 font-bold">•</span>
                   <span>You can pause delivery anytime from the Calendar page</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-emerald-600 font-bold">•</span>
+                  <span className="text-green-800 font-bold">•</span>
                   <span>Money is deducted from your wallet <strong>after each delivery</strong></span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-emerald-600 font-bold">•</span>
+                  <span className="text-green-800 font-bold">•</span>
                   <span>Modify your daily quantity anytime from this page</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-emerald-600 font-bold">•</span>
+                  <span className="text-green-800 font-bold">•</span>
                   <span>Add money to your wallet from the <strong>Wallet</strong> page</span>
                 </li>
               </ul>

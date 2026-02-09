@@ -15,18 +15,16 @@ export const Card: React.FC<CardProps> = ({
   hover = false,
   onClick,
 }) => {
-  const baseClasses = 'rounded-2xl shadow-md transition-all duration-300';
-
-  const variantClasses = {
-    default: 'bg-white',
-    gradient: 'bg-gradient-to-br from-cream-100 to-white border border-brown-100',
-  };
-
-  const hoverClass = hover ? 'hover:shadow-lg hover:-translate-y-1' : '';
+  const hasCustomBg = /\bbg-/.test(className);
+  const hasCustomBorder = /\bborder-(?!gray-200)/.test(className);
+  const bgClass = hasCustomBg ? '' : 'bg-white';
+  const borderClass = hasCustomBorder ? '' : 'border border-gray-200';
+  const baseClasses = `rounded-lg ${bgClass} ${borderClass} shadow-sm`;
+  const hoverClass = hover ? 'hover:shadow-md transition-shadow duration-200' : '';
 
   return (
     <div
-      className={`${baseClasses} ${variantClasses[variant]} ${hoverClass} ${className}`}
+      className={`${baseClasses} ${hoverClass} ${className}`}
       onClick={onClick}
     >
       {children}

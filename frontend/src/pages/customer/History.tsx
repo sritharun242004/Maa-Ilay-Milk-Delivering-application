@@ -89,7 +89,7 @@ export const History: React.FC = () => {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
                 className={`flex-1 px-6 py-3 rounded-lg font-medium transition-all ${activeTab === tab.id
-                  ? 'bg-emerald-500 text-white'
+                  ? 'bg-green-500 text-white'
                   : 'bg-transparent text-gray-600 hover:bg-gray-100'
                   }`}
               >
@@ -159,15 +159,15 @@ export const History: React.FC = () => {
             ) : (
               <>
                 <div className="grid grid-cols-3 gap-6 mb-8">
-                  <Card className="p-6 bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+                  <Card className="p-6 p-0 bg-white">
                     <p className="text-sm opacity-90 mb-2">Total Issued</p>
                     <p className="text-4xl font-bold">{bottleData.totalIssued}</p>
                   </Card>
-                  <Card className="p-6 bg-gradient-to-br from-green-500 to-green-600 text-white">
+                  <Card className="p-6 p-0 bg-white">
                     <p className="text-sm opacity-90 mb-2">Total Collected</p>
                     <p className="text-4xl font-bold">{bottleData.totalCollected}</p>
                   </Card>
-                  <Card className="p-6 bg-gradient-to-br from-orange-500 to-orange-600 text-white">
+                  <Card className="p-6 p-0 bg-white">
                     <p className="text-sm opacity-90 mb-2">With Customer</p>
                     <p className="text-4xl font-bold">{bottleData.withCustomer}</p>
                   </Card>

@@ -120,17 +120,17 @@ export const CustomerCalendar: React.FC = () => {
 
     // Selection state takes priority in border
     if (isSelected) {
-      className += ' border-emerald-500 ring-4 ring-emerald-500/20 scale-105 z-10';
+      className += ' border-green-500 ring-4 ring-green-500/20 scale-105 z-10';
     } else {
       className += ' border-transparent';
     }
 
     // Color based on status
     if (isToday) {
-      className += ' bg-emerald-50 text-emerald-800 border-emerald-200';
+      className += ' bg-green-50 text-green-900 border-green-200';
     } else if (isPast) {
       if (deliveryStatus === 'DELIVERED') {
-        className += ' bg-emerald-100 text-emerald-800 opacity-60';
+        className += ' bg-green-100 text-green-900 opacity-60';
       } else if (deliveryStatus === 'PAUSED' || isPaused) {
         className += ' bg-orange-100 text-orange-800 opacity-60';
       } else {
@@ -141,7 +141,7 @@ export const CustomerCalendar: React.FC = () => {
     } else if (mod) {
       className += ' bg-blue-100 text-blue-800 border-blue-200 shadow-sm';
     } else {
-      className += ' bg-white text-gray-700 border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/50';
+      className += ' bg-white text-gray-700 border-gray-100 hover:border-green-200 hover:bg-green-50/50';
     }
 
     if (!isPast) className += ' cursor-pointer';
@@ -362,7 +362,7 @@ export const CustomerCalendar: React.FC = () => {
       <CustomerLayout>
         <div className="max-w-4xl mx-auto flex items-center justify-center min-h-[50vh]">
           <div className="flex flex-col items-center gap-4">
-            <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
             <p className="text-gray-500 animate-pulse font-medium">Syncing your delivery calendar...</p>
           </div>
         </div>
@@ -378,14 +378,14 @@ export const CustomerCalendar: React.FC = () => {
             <h1 className="text-4xl font-black text-gray-900 mb-2 tracking-tight">Delivery Calendar</h1>
             <p className="text-gray-500 font-medium tracking-tight">Manage pauses and extra milk requests visually.</p>
           </div>
-          <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 px-4 py-2 rounded-2xl">
-            <div className="bg-emerald-500 text-white p-1 rounded-full"><CheckCircle2 className="w-4 h-4" /></div>
-            <span className="text-xs font-bold text-emerald-800 uppercase tracking-widest">Live Sync Enabled</span>
+          <div className="flex items-center gap-2 bg-green-50 border border-green-100 px-4 py-2 rounded-lg">
+            <div className="bg-green-500 text-white p-1 rounded-full"><CheckCircle2 className="w-4 h-4" /></div>
+            <span className="text-xs font-bold text-green-900 uppercase tracking-widest">Live Sync Enabled</span>
           </div>
         </div>
 
         {error && (
-          <div className="bg-red-50 border-2 border-red-100 rounded-2xl p-4 mb-8 text-red-700 font-semibold flex items-center justify-between shadow-sm animate-in fade-in zoom-in duration-300">
+          <div className="bg-red-50 border-2 border-red-100 rounded-lg p-4 mb-8 text-red-700 font-semibold flex items-center justify-between shadow-sm animate-in fade-in zoom-in duration-300">
             <div className="flex items-center gap-3">
               <AlertCircle className="w-5 h-5 flex-shrink-0" />
               <p className="tracking-tight">{error}</p>
@@ -397,12 +397,12 @@ export const CustomerCalendar: React.FC = () => {
         )}
 
         {successMessage && (
-          <div className="bg-emerald-50 border-2 border-emerald-100 rounded-2xl p-4 mb-8 text-emerald-700 font-semibold flex items-center justify-between shadow-sm animate-in fade-in zoom-in duration-300">
+          <div className="bg-green-50 border-2 border-green-100 rounded-lg p-4 mb-8 text-green-800 font-semibold flex items-center justify-between shadow-sm animate-in fade-in zoom-in duration-300">
             <div className="flex items-center gap-3">
               <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
               <p className="tracking-tight">{successMessage}</p>
             </div>
-            <button onClick={() => setSuccessMessage(null)} className="p-1 hover:bg-emerald-100 rounded-lg transition-colors">
+            <button onClick={() => setSuccessMessage(null)} className="p-1 hover:bg-green-100 rounded-lg transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -445,14 +445,14 @@ export const CustomerCalendar: React.FC = () => {
         <Card className="p-10 border-2 border-gray-100 shadow-xl shadow-gray-200/50 relative overflow-hidden bg-white">
           {(refreshing || saving) && (
             <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] z-20 flex items-center justify-center">
-              <div className="bg-white shadow-2xl px-6 py-4 rounded-3xl flex items-center gap-4 border-2 border-emerald-100 animate-in zoom-in duration-300">
-                <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
-                <span className="text-base font-black text-emerald-800 tracking-tight uppercase tracking-widest">Updating Calendar...</span>
+              <div className="bg-white shadow-sm px-6 py-4 rounded-lg flex items-center gap-4 border-2 border-green-100 animate-in zoom-in duration-300">
+                <Loader2 className="w-6 h-6 text-green-500 animate-spin" />
+                <span className="text-base font-black text-green-900 tracking-tight uppercase tracking-widest">Updating Calendar...</span>
               </div>
             </div>
           )}
 
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 via-blue-500 to-orange-400 opacity-50" />
+          <div className="absolute top-0 left-0 w-full h-1 bg-green-800 opacity-30" />
 
           <div className="flex items-center justify-between mb-10">
             <h2 className="text-3xl font-black text-gray-900 tracking-tight">{monthLabel}</h2>
@@ -460,14 +460,14 @@ export const CustomerCalendar: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setViewMonth(new Date(year, month - 1, 1))}
-                className="flex items-center justify-center rounded-xl bg-white border-2 border-gray-100 hover:bg-emerald-50 hover:border-emerald-200 h-11 w-11 transition-all shadow-sm active:scale-95"
+                className="flex items-center justify-center rounded-xl bg-white border-2 border-gray-100 hover:bg-green-50 hover:border-green-200 h-11 w-11 transition-all shadow-sm "
               >
                 <ChevronLeft className="w-6 h-6 text-gray-600" />
               </button>
               <button
                 type="button"
                 onClick={() => setViewMonth(new Date(year, month + 1, 1))}
-                className="flex items-center justify-center rounded-xl bg-white border-2 border-gray-100 hover:bg-emerald-50 hover:border-emerald-200 h-11 w-11 transition-all shadow-sm active:scale-95"
+                className="flex items-center justify-center rounded-xl bg-white border-2 border-gray-100 hover:bg-green-50 hover:border-green-200 h-11 w-11 transition-all shadow-sm "
               >
                 <ChevronRight className="w-6 h-6 text-gray-600" />
               </button>
@@ -492,11 +492,11 @@ export const CustomerCalendar: React.FC = () => {
                   disabled={saving}
                 >
                   <span className={`relative z-10 transition-transform ${isSelected ? 'scale-110' : ''}`}>{day}</span>
-                  {isToday && <span className="absolute top-1 text-[8px] font-black text-emerald-600 uppercase tracking-tighter opacity-70">Today</span>}
+                  {isToday && <span className="absolute top-1 text-[8px] font-black text-green-800 uppercase tracking-tighter opacity-70">Today</span>}
 
                   {isSelected && (
                     <div className="absolute top-2 right-2">
-                      <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
                     </div>
                   )}
                   {mod && !isPaused && (
@@ -556,7 +556,7 @@ export const CustomerCalendar: React.FC = () => {
       {/* Pause Confirmation Dialog */}
       {showPauseConfirm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200] animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 animate-in zoom-in slide-in-from-bottom-4 duration-300">
+          <div className="bg-white rounded-lg shadow-sm p-8 max-w-md w-full mx-4 animate-in zoom-in slide-in-from-bottom-4 duration-300">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">
                 <AlertCircle className="w-6 h-6 text-orange-600" />
@@ -596,19 +596,19 @@ export const CustomerCalendar: React.FC = () => {
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.4)] p-3 rounded-2xl">
+                  <div className="bg-green-500 shadow-[0_0_20px_rgba(16,185,129,0.4)] p-3 rounded-lg">
                     <CalendarIcon className="w-6 h-6 text-white" />
                   </div>
                   <div className="space-y-0.5">
                     <h4 className="text-lg font-black tracking-tight">{selectedDates.size} {selectedDates.size === 1 ? 'Date' : 'Dates'} Selected</h4>
-                    <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${singleDateInfo?.color || 'text-emerald-400'}`}>
+                    <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${singleDateInfo?.color || 'text-green-600'}`}>
                       {singleDateInfo ? (
                         <>
                           <div className={`w-1.5 h-1.5 rounded-full bg-current`} />
                           {singleDateInfo.label}
                         </>
                       ) : (
-                        <span className="text-gray-400">Choose action for selection</span>
+                        <span className="text-gray-200">Choose action for selection</span>
                       )}
                     </div>
                   </div>
@@ -626,7 +626,7 @@ export const CustomerCalendar: React.FC = () => {
                 <div className="w-full md:w-auto grid grid-cols-2 gap-3">
                   <Button
                     onClick={() => handleBulkAction('pause')}
-                    className="h-12 border-none font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl transition-all bg-orange-600 hover:bg-orange-500 shadow-orange-900/20 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="h-12 border-none font-black text-xs uppercase tracking-widest rounded-lg shadow-xl transition-all bg-orange-600 hover:bg-orange-500 shadow-orange-900/20 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     disabled={saving}
                   >
                     {saving ? (
@@ -641,7 +641,7 @@ export const CustomerCalendar: React.FC = () => {
 
                   <Button
                     onClick={() => handleBulkAction('resume')}
-                    className="h-12 border-2 border-white/10 hover:bg-white/5 bg-transparent text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="h-12 border-2 border-white/10 hover:bg-white/5 bg-transparent text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     disabled={saving}
                   >
                     {saving ? (
@@ -658,14 +658,14 @@ export const CustomerCalendar: React.FC = () => {
                 <div className="hidden md:block w-px h-10 bg-white/10" />
 
                 <div className="w-full flex-1 space-y-3">
-                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block text-center md:text-left">Assign Quantity Override</span>
-                  <div className="flex items-center gap-2 bg-white/5 rounded-2xl p-1.5 border border-white/10 ring-1 ring-white/5 overflow-x-auto pb-1 md:pb-1.5 no-scrollbar">
+                  <span className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] block text-center md:text-left">Assign Quantity Override</span>
+                  <div className="flex items-center gap-2 bg-white/5 rounded-lg p-1.5 border border-white/10 ring-1 ring-white/5 overflow-x-auto pb-1 md:pb-1.5 no-scrollbar">
                     {quantityOptions.map(ml => (
                       <button
                         key={ml}
                         onClick={() => handleBulkAction('modify', ml)}
                         disabled={saving}
-                        className="min-w-[75px] flex-1 py-2.5 rounded-xl text-xs font-black hover:bg-emerald-500 transition-all active:scale-95 bg-white/10 shadow-inner disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                        className="min-w-[75px] flex-1 py-2.5 rounded-xl text-xs font-black hover:bg-green-500 transition-all  bg-white/10 shadow-inner disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
                       >
                         {saving ? (
                           <Loader2 className="w-3 h-3 animate-spin" />
@@ -679,8 +679,8 @@ export const CustomerCalendar: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-center md:justify-start gap-2 pt-2 border-t border-white/5 opacity-50">
-                <Info className="w-3.5 h-3.5 text-gray-400" />
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic leading-tight">These changes update the delivery person's app in real-time.</p>
+                <Info className="w-3.5 h-3.5 text-gray-200" />
+                <p className="text-[10px] font-bold text-gray-200 uppercase tracking-widest italic leading-tight">These changes update the delivery person's app in real-time.</p>
               </div>
             </div>
           </div>

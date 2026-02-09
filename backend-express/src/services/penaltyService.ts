@@ -318,12 +318,14 @@ export async function getFlaggedCustomersDetailed() {
 }
 
 /**
- * Manually impose penalty on a specific customer
+ * Manually impose fine on a specific customer for unreturned bottles.
+ * Supports partial fining — admin chooses how many bottles to fine (oldest first).
  */
 export async function imposePenaltyOnCustomer(
   customerId: string,
-  largeBottlePrice: number,
-  smallBottlePrice: number
+  fineAmountPaise: number,
+  largeBottlesToFine: number,
+  smallBottlesToFine: number
 ): Promise<{
   success: boolean;
   message: string;
@@ -334,101 +336,86 @@ export async function imposePenaltyOnCustomer(
   thresholdDate.setDate(thresholdDate.getDate() - PENALTY_THRESHOLD_DAYS);
 
   try {
-    // Find customer's overdue bottles
-    // FIX: Handle both issuedDate and createdAt (fallback for old records)
+    // Find customer's overdue bottles, ordered by date (oldest first)
     const overdueBottles = await prisma.bottleLedger.findMany({
       where: {
         customerId,
         action: 'ISSUED',
         OR: [
-          {
-            issuedDate: {
-              lte: thresholdDate,
-            }
-          },
-          {
-            AND: [
-              { issuedDate: null },
-              {
-                createdAt: {
-                  lte: thresholdDate,
-                }
-              }
-            ]
-          }
+          { issuedDate: { lte: thresholdDate } },
+          { AND: [{ issuedDate: null }, { createdAt: { lte: thresholdDate } }] },
         ],
         penaltyAppliedAt: null,
       },
+      orderBy: [{ issuedDate: 'asc' }, { createdAt: 'asc' }],
     });
 
     if (overdueBottles.length === 0) {
-      return {
-        success: false,
-        message: 'No overdue bottles found for this customer',
-      };
+      return { success: false, message: 'No overdue bottles found for this customer' };
     }
 
-    // Count bottles
-    let largeBottles = 0;
-    let smallBottles = 0;
+    // Separate by size and pick the oldest N entries for each
+    const largeEntries = overdueBottles.filter(b => b.size === 'LARGE');
+    const smallEntries = overdueBottles.filter(b => b.size === 'SMALL');
 
-    for (const bottle of overdueBottles) {
-      if (bottle.size === 'LARGE') {
-        largeBottles += bottle.quantity;
-      } else {
-        smallBottles += bottle.quantity;
-      }
+    // Collect bottle IDs to mark as penalized (oldest first, up to requested count)
+    const idsToMark: string[] = [];
+    let largeMarked = 0;
+    for (const entry of largeEntries) {
+      if (largeMarked >= largeBottlesToFine) break;
+      idsToMark.push(entry.id);
+      largeMarked += entry.quantity;
     }
 
-    // Calculate total penalty (prices are in paise)
-    const totalPenaltyPaise = (largeBottles * largeBottlePrice) + (smallBottles * smallBottlePrice);
-
-    if (totalPenaltyPaise <= 0) {
-      return {
-        success: false,
-        message: 'Invalid penalty amount',
-      };
+    let smallMarked = 0;
+    for (const entry of smallEntries) {
+      if (smallMarked >= smallBottlesToFine) break;
+      idsToMark.push(entry.id);
+      smallMarked += entry.quantity;
     }
 
-    // Charge penalty in transaction
+    const totalFined = largeMarked + smallMarked;
+    if (totalFined <= 0) {
+      return { success: false, message: 'No bottles selected to fine' };
+    }
+
+    const fineRs = fineAmountPaise / 100;
+
+    // Charge fine in transaction
     await prisma.$transaction(async (tx) => {
-      // Get customer wallet
-      const wallet = await tx.wallet.findUnique({
-        where: { customerId },
-      });
+      const wallet = await tx.wallet.findUnique({ where: { customerId } });
+      if (!wallet) throw new Error('Wallet not found');
 
-      if (!wallet) {
-        throw new Error('Wallet not found');
-      }
-
-      // Deduct penalty
-      const newBalance = wallet.balancePaise - totalPenaltyPaise;
+      const newBalance = wallet.balancePaise - fineAmountPaise;
 
       await tx.wallet.update({
         where: { customerId },
         data: { balancePaise: newBalance },
       });
 
-      // Create transaction
+      // Build description
+      const parts: string[] = [];
+      if (largeMarked > 0) parts.push(`${largeMarked}×1L`);
+      if (smallMarked > 0) parts.push(`${smallMarked}×500ml`);
+
       await tx.walletTransaction.create({
         data: {
           walletId: wallet.id,
           type: 'PENALTY_CHARGE',
-          amountPaise: -totalPenaltyPaise,
+          amountPaise: -fineAmountPaise,
           balanceAfterPaise: newBalance,
-          description: `Manual penalty: ${largeBottles} × 1L (₹${largeBottlePrice / 100}) and ${smallBottles} × 500ml (₹${smallBottlePrice / 100}) bottles not returned after ${PENALTY_THRESHOLD_DAYS} days`,
+          description: `Fine for empty bottles — ${totalFined} bottle${totalFined > 1 ? 's' : ''} not returned (${parts.join(', ')})`,
           referenceType: 'penalty',
         },
       });
 
-      // Mark bottles as penalized
-      const bottleIds = overdueBottles.map((b) => b.id);
+      // Mark only the selected oldest bottles as penalized
       await tx.bottleLedger.updateMany({
-        where: { id: { in: bottleIds } },
+        where: { id: { in: idsToMark } },
         data: { penaltyAppliedAt: now },
       });
 
-      // Create penalty ledger entries
+      // Create penalty ledger entries to update bottle balances
       const latestLedger = await tx.bottleLedger.findFirst({
         where: { customerId },
         orderBy: { createdAt: 'desc' },
@@ -437,31 +424,31 @@ export async function imposePenaltyOnCustomer(
       const currentLargeBalance = latestLedger?.largeBottleBalanceAfter ?? 0;
       const currentSmallBalance = latestLedger?.smallBottleBalanceAfter ?? 0;
 
-      if (largeBottles > 0) {
+      if (largeMarked > 0) {
         await tx.bottleLedger.create({
           data: {
             customerId,
             action: 'PENALTY_CHARGED',
             size: 'LARGE',
-            quantity: largeBottles,
-            largeBottleBalanceAfter: Math.max(0, currentLargeBalance - largeBottles),
+            quantity: largeMarked,
+            largeBottleBalanceAfter: Math.max(0, currentLargeBalance - largeMarked),
             smallBottleBalanceAfter: currentSmallBalance,
-            description: `Manual penalty: ${largeBottles} × 1L bottles (₹${largeBottlePrice / 100} each)`,
+            description: `Fine for empty bottles: ${largeMarked} × 1L (₹${fineRs})`,
             penaltyAppliedAt: now,
           },
         });
       }
 
-      if (smallBottles > 0) {
+      if (smallMarked > 0) {
         await tx.bottleLedger.create({
           data: {
             customerId,
             action: 'PENALTY_CHARGED',
             size: 'SMALL',
-            quantity: smallBottles,
-            largeBottleBalanceAfter: largeBottles > 0 ? Math.max(0, currentLargeBalance - largeBottles) : currentLargeBalance,
-            smallBottleBalanceAfter: Math.max(0, currentSmallBalance - smallBottles),
-            description: `Manual penalty: ${smallBottles} × 500ml bottles (₹${smallBottlePrice / 100} each)`,
+            quantity: smallMarked,
+            largeBottleBalanceAfter: largeMarked > 0 ? Math.max(0, currentLargeBalance - largeMarked) : currentLargeBalance,
+            smallBottleBalanceAfter: Math.max(0, currentSmallBalance - smallMarked),
+            description: `Fine for empty bottles: ${smallMarked} × 500ml (₹${fineRs})`,
             penaltyAppliedAt: now,
           },
         });
@@ -470,14 +457,14 @@ export async function imposePenaltyOnCustomer(
 
     return {
       success: true,
-      message: `Penalty of ₹${totalPenaltyPaise / 100} imposed successfully`,
-      totalCharged: totalPenaltyPaise / 100,
+      message: `Fine of ₹${fineRs} imposed for ${totalFined} unreturned bottle${totalFined > 1 ? 's' : ''}`,
+      totalCharged: fineRs,
     };
   } catch (error) {
-    console.error('Error imposing penalty:', error);
+    console.error('Error imposing fine:', error);
     return {
       success: false,
-      message: error instanceof Error ? error.message : 'Failed to impose penalty',
+      message: error instanceof Error ? error.message : 'Failed to impose fine',
     };
   }
 }
@@ -487,34 +474,32 @@ export async function imposePenaltyOnCustomer(
  */
 export async function getPenaltyStatistics() {
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  // Get all penalty transactions
-  const allPenalties = await prisma.walletTransaction.findMany({
-    where: {
-      type: 'PENALTY_CHARGE',
-    },
-    select: {
-      amountPaise: true,
-      createdAt: true,
-      Wallet: {
-        select: {
-          customerId: true,
-        },
-      },
-    },
-  });
 
   // Calculate total pending (customers with overdue bottles)
-  const fiveDaysAgo = new Date(now);
-  fiveDaysAgo.setDate(fiveDaysAgo.getDate() - PENALTY_THRESHOLD_DAYS);
+  const thresholdDate = new Date(now);
+  thresholdDate.setDate(thresholdDate.getDate() - PENALTY_THRESHOLD_DAYS);
 
+  // Match the same query as getFlaggedCustomersDetailed to get consistent counts
   const overdueBottles = await prisma.bottleLedger.findMany({
     where: {
       action: 'ISSUED',
-      issuedDate: {
-        lte: fiveDaysAgo,
-      },
+      OR: [
+        {
+          issuedDate: {
+            lte: thresholdDate,
+          },
+        },
+        {
+          AND: [
+            { issuedDate: null },
+            {
+              createdAt: {
+                lte: thresholdDate,
+              },
+            },
+          ],
+        },
+      ],
       penaltyAppliedAt: null,
     },
     include: {
@@ -527,59 +512,18 @@ export async function getPenaltyStatistics() {
     },
   });
 
-  // Calculate pending penalties
-  let totalPendingPaise = 0;
+  // Calculate pending bottle count and flagged customers
+  let totalPendingBottles = 0;
   const flaggedCustomerIds = new Set<string>();
 
   for (const bottle of overdueBottles) {
-    const penaltyPaise = bottle.size === 'LARGE' ? LARGE_BOTTLE_PENALTY_PAISE : SMALL_BOTTLE_PENALTY_PAISE;
-    totalPendingPaise += bottle.quantity * penaltyPaise;
+    totalPendingBottles += bottle.quantity;
     flaggedCustomerIds.add(bottle.customerId);
   }
 
-  // Calculate collected this month
-  const collectedThisMonth = allPenalties
-    .filter((p) => new Date(p.createdAt) >= monthStart)
-    .reduce((sum, p) => sum + Math.abs(p.amountPaise), 0);
-
-  // Get flagged customers details
-  const flaggedCustomers = await prisma.customer.findMany({
-    where: {
-      id: { in: Array.from(flaggedCustomerIds) },
-    },
-    select: {
-      id: true,
-      name: true,
-      phone: true,
-      BottleLedger: {
-        where: {
-          action: 'ISSUED',
-          issuedDate: {
-            lte: fiveDaysAgo,
-          },
-          penaltyAppliedAt: null,
-        },
-        orderBy: { issuedDate: 'asc' },
-        take: 1,
-      },
-    },
-  });
-
-  const flaggedList = flaggedCustomers.map((c) => ({
-    id: c.id,
-    name: c.name,
-    phone: c.phone,
-    oldestBottleDate: c.BottleLedger[0]?.issuedDate ?? null,
-    daysOverdue: c.BottleLedger[0]?.issuedDate
-      ? Math.floor((now.getTime() - new Date(c.BottleLedger[0].issuedDate).getTime()) / (1000 * 60 * 60 * 24))
-      : 0,
-  }));
-
   return {
-    totalPendingRs: Math.round(totalPendingPaise / 100),
-    collectedThisMonthRs: Math.round(collectedThisMonth / 100),
+    totalPendingBottles,
     flaggedCustomersCount: flaggedCustomerIds.size,
-    flaggedCustomers: flaggedList,
     rules: [
       `Bottle not returned after ${PENALTY_THRESHOLD_DAYS} days: ₹${LARGE_BOTTLE_PENALTY_PAISE / 100} (1L), ₹${SMALL_BOTTLE_PENALTY_PAISE / 100} (500ml)`,
     ],

@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Droplet, Truck, Clock, LogOut, Users } from 'lucide-react';
+import { Truck, Clock, LogOut, Users, Menu, X } from 'lucide-react';
 
 interface DeliveryLayoutProps {
   children: React.ReactNode;
@@ -10,6 +10,7 @@ interface DeliveryLayoutProps {
 export const DeliveryLayout: React.FC<DeliveryLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -23,31 +24,32 @@ export const DeliveryLayout: React.FC<DeliveryLayoutProps> = ({ children }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-brown-50 flex">
-      <aside className="hidden lg:flex lg:flex-col w-64 bg-white border-r border-brown-200 fixed left-0 top-0 h-screen p-6">
-        <div className="mb-8 px-2">
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex lg:flex-col w-60 bg-white border-r border-gray-200 fixed left-0 top-0 h-screen px-4 py-5">
+        <div className="mb-6 px-2">
           <img
             src="/Maa Illay Remove Background (1).png"
             alt="Maa Ilay Logo"
-            className="h-12 w-auto object-contain mb-1"
+            className="h-10 w-auto object-contain mb-1"
           />
-          <span className="text-xs text-neutral-500 block ml-1">Delivery Portal</span>
+          <span className="text-xs text-gray-400 block">Delivery Portal</span>
         </div>
 
-        <nav className="flex-1 space-y-2">
+        <nav className="flex-1 space-y-0.5">
           {navItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
+                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
                   isActive
-                    ? 'bg-brown-100 text-brand'
-                    : 'text-neutral-700 hover:bg-brown-50 hover:text-brand'
+                    ? 'bg-green-50 text-green-800'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`
               }
             >
-              <item.icon className="w-5 h-5" />
+              <item.icon className="w-4 h-4" />
               <span>{item.label}</span>
             </NavLink>
           ))}
@@ -55,14 +57,68 @@ export const DeliveryLayout: React.FC<DeliveryLayoutProps> = ({ children }) => {
 
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-red-600 hover:bg-red-50 transition-all duration-200 mt-4"
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors duration-200 mt-2"
         >
-          <LogOut className="w-5 h-5" />
+          <LogOut className="w-4 h-4" />
           <span>Logout</span>
         </button>
       </aside>
 
-      <main className="flex-1 lg:ml-64 p-8">{children}</main>
+      {/* Mobile top bar */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-4 py-2.5 flex items-center justify-between">
+        <div className="flex items-center">
+          <img
+            src="/Maa Illay Remove Background (1).png"
+            alt="Maa Ilay Logo"
+            className="h-9 w-auto object-contain"
+          />
+        </div>
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="p-2 hover:bg-gray-100 rounded-lg"
+        >
+          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+      </div>
+
+      {/* Mobile slide-out menu */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden fixed inset-0 z-40 bg-black/40" onClick={() => setMobileMenuOpen(false)}>
+          <div
+            className="absolute left-0 top-0 bottom-0 w-60 bg-white px-4 py-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <nav className="space-y-0.5 mt-14">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                      isActive
+                        ? 'bg-green-50 text-green-800'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    }`
+                  }
+                >
+                  <item.icon className="w-4 h-4" />
+                  <span>{item.label}</span>
+                </NavLink>
+              ))}
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors duration-200 w-full"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+      )}
+
+      <main className="flex-1 lg:ml-60 p-6 pt-20 lg:pt-6">{children}</main>
     </div>
   );
 };

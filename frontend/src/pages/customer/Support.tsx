@@ -79,8 +79,8 @@ export const Support: React.FC = () => {
                     className="bg-white rounded-xl p-4 hover:shadow-md transition-shadow"
                   >
                     <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <contact.icon className="w-6 h-6 text-emerald-600" />
+                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <contact.icon className="w-6 h-6 text-green-800" />
                       </div>
                       <div>
                         <p className="font-semibold text-gray-900 mb-1">{contact.label}</p>
@@ -131,7 +131,7 @@ export const Support: React.FC = () => {
                   <select
                     value={formData.subject}
                     onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors outline-none"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-colors outline-none"
                   >
                     <option value="">Select subject</option>
                     <option value="delivery">Delivery Issue</option>
@@ -150,7 +150,7 @@ export const Support: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={5}
                     placeholder="Describe your issue..."
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors outline-none resize-none"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-colors outline-none resize-none"
                   />
                 </div>
 
@@ -167,7 +167,7 @@ export const Support: React.FC = () => {
                           onChange={(e) =>
                             setFormData({ ...formData, priority: e.target.value })
                           }
-                          className="w-4 h-4 text-emerald-500"
+                          className="w-4 h-4 text-green-500"
                         />
                         <span className="capitalize">{priority}</span>
                       </label>

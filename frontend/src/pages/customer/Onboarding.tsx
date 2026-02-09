@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Droplet, MapPin, Phone, Home, User, CheckCircle, AlertCircle } from 'lucide-react';
+import { MapPin, Phone, Home, User, CheckCircle, AlertCircle } from 'lucide-react';
 import { fetchWithCsrf, clearCsrfToken } from '../../utils/csrf';
 import { getApiUrl } from '../../config/api';
 
@@ -87,79 +87,53 @@ export const CustomerOnboarding: React.FC = () => {
     }
   };
 
+  const inputClasses = "w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-green-800 focus:ring-2 focus:ring-green-800/10 outline-none transition-colors text-gray-900 placeholder:text-gray-400";
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-emerald-50">
-      {/* Floating Nav Bar - same as Home page */}
-      <nav className="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-[1350px] bg-white/80 backdrop-blur-2xl border border-white/40 shadow-2xl rounded-full transition-all duration-300">
-        <div className="px-8 md:px-10 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full shadow-lg flex items-center justify-center">
-              <Droplet className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-lg font-bold text-gray-900">Maa Ilay</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              className="px-5 py-2 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-colors"
-            >
-              Back to Home
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/customer/login')}
-              className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-full text-sm font-semibold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300"
-            >
-              Subscribe / Login
-            </button>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Simple top bar */}
+      <nav className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+        <img
+          src="/Maa Illay Remove Background (1).png"
+          alt="Maa Ilay Logo"
+          className="h-9 w-auto object-contain"
+        />
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          Back to Home
+        </button>
       </nav>
 
-      {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-6 pt-40 pb-12">
-        {/* Page Title */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Complete your profile</h1>
-          <p className="text-gray-600 mt-2">We need a few details to deliver fresh milk to your doorstep.</p>
+      <div className="max-w-lg mx-auto px-4 py-10">
+        <div className="mb-6">
+          <h1 className="text-xl font-semibold text-gray-900">Complete your profile</h1>
+          <p className="text-sm text-gray-500 mt-1">We need a few details to deliver fresh milk to your doorstep.</p>
         </div>
+
         {/* Info Banner */}
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 mb-8 flex items-start gap-4">
-          <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
-            <CheckCircle className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-blue-900 mb-1">Why we need this information</h3>
-            <p className="text-blue-700 text-sm leading-relaxed">
-              We need your contact details and address to deliver fresh milk to your doorstep every morning. 
-              Your information is secure and will only be used for delivery purposes.
-            </p>
-          </div>
+        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6 flex items-start gap-3">
+          <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-blue-700">
+            Your contact details and address are needed for delivery purposes only. Your information is secure.
+          </p>
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-6 mb-8 flex items-start gap-4">
-            <div className="w-10 h-10 bg-red-500 rounded-xl flex items-center justify-center flex-shrink-0">
-              <AlertCircle className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-red-900 mb-1">Error</h3>
-              <p className="text-red-700 text-sm">{error}</p>
-            </div>
+          <div className="bg-red-50 border border-red-100 rounded-lg p-4 mb-6 flex items-start gap-3">
+            <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700">{error}</p>
           </div>
         )}
 
         {/* Form Card */}
-        <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Name */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                  <User className="w-4 h-4 text-emerald-600" />
-                </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Full Name <span className="text-red-500">*</span>
               </label>
               <input
@@ -170,16 +144,12 @@ export const CustomerOnboarding: React.FC = () => {
                 required
                 minLength={2}
                 placeholder="Enter your full name"
-                className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                className={inputClasses}
               />
             </div>
 
-            {/* Phone Number */}
             <div>
-              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                  <Phone className="w-4 h-4 text-emerald-600" />
-                </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Phone Number <span className="text-red-500">*</span>
               </label>
               <input
@@ -190,17 +160,13 @@ export const CustomerOnboarding: React.FC = () => {
                 required
                 pattern="[0-9]{10}"
                 placeholder="Enter 10-digit mobile number"
-                className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                className={inputClasses}
               />
-              <p className="text-xs text-gray-500 mt-2">We'll use this for delivery updates</p>
+              <p className="text-xs text-gray-400 mt-1">We'll use this for delivery updates</p>
             </div>
 
-            {/* Address Line 1 */}
             <div>
-              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                  <Home className="w-4 h-4 text-emerald-600" />
-                </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Address Line 1 <span className="text-red-500">*</span>
               </label>
               <input
@@ -210,16 +176,12 @@ export const CustomerOnboarding: React.FC = () => {
                 onChange={handleChange}
                 required
                 placeholder="House/Flat No., Building Name, Street"
-                className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                className={inputClasses}
               />
             </div>
 
-            {/* Address Line 2 */}
             <div>
-              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <Home className="w-4 h-4 text-gray-600" />
-                </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Address Line 2 <span className="text-gray-400 font-normal">(Optional)</span>
               </label>
               <input
@@ -228,16 +190,12 @@ export const CustomerOnboarding: React.FC = () => {
                 value={formData.addressLine2}
                 onChange={handleChange}
                 placeholder="Area, Colony, Locality"
-                className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                className={inputClasses}
               />
             </div>
 
-            {/* Landmark */}
             <div>
-              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <MapPin className="w-4 h-4 text-gray-600" />
-                </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Landmark <span className="text-gray-400 font-normal">(Optional)</span>
               </label>
               <input
@@ -246,18 +204,14 @@ export const CustomerOnboarding: React.FC = () => {
                 value={formData.landmark}
                 onChange={handleChange}
                 placeholder="Near temple, bus stop, hospital, etc."
-                className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                className={inputClasses}
               />
-              <p className="text-xs text-gray-500 mt-2">Helps our delivery person find you easily</p>
+              <p className="text-xs text-gray-400 mt-1">Helps our delivery person find you easily</p>
             </div>
 
-            {/* City & Pincode */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                  <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                    <MapPin className="w-4 h-4 text-emerald-600" />
-                  </div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   City <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -267,14 +221,11 @@ export const CustomerOnboarding: React.FC = () => {
                   onChange={handleChange}
                   required
                   placeholder="e.g. Pondicherry"
-                  className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                  className={inputClasses}
                 />
               </div>
               <div>
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                  <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                    <MapPin className="w-4 h-4 text-emerald-600" />
-                  </div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Pincode <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -285,39 +236,28 @@ export const CustomerOnboarding: React.FC = () => {
                   required
                   pattern="[0-9]{6}"
                   placeholder="6-digit pincode"
-                  className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                  className={inputClasses}
                 />
               </div>
             </div>
 
-            {/* Submit Button */}
-            <div className="pt-6">
+            <div className="pt-2">
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white py-4 px-6 rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 transform hover:scale-[1.02] transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3"
+                className="w-full bg-green-800 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-green-900 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Saving your details...</span>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
                   </>
                 ) : (
-                  <>
-                    <CheckCircle className="w-5 h-5" />
-                    <span>Complete Profile & Continue</span>
-                  </>
+                  'Complete Profile & Continue'
                 )}
               </button>
             </div>
           </form>
-        </div>
-
-        {/* Footer Note */}
-        <div className="text-center mt-8">
-          <p className="text-sm text-gray-500">
-            🔒 Your information is encrypted and secure
-          </p>
         </div>
       </div>
     </div>

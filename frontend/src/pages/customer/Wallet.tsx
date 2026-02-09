@@ -151,7 +151,7 @@ export const Wallet: React.FC = () => {
     return (
       <CustomerLayout>
         <div className="max-w-4xl mx-auto flex items-center justify-center min-h-[40vh]">
-          <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
         </div>
       </CustomerLayout>
     );
@@ -186,25 +186,24 @@ export const Wallet: React.FC = () => {
 
         {/* Success Message */}
         {success && (
-          <Card className="p-6 mb-6 border-2 border-emerald-500 bg-emerald-50">
+          <Card className="p-6 mb-6 border-2 border-green-500 bg-green-50">
             <div className="flex items-center gap-3">
-              <Check className="w-6 h-6 text-emerald-600" />
-              <p className="font-semibold text-emerald-900">Money added successfully!</p>
+              <Check className="w-6 h-6 text-green-800" />
+              <p className="font-semibold text-green-950">Money added successfully!</p>
             </div>
           </Card>
         )}
 
         {/* Wallet Balance Card */}
-        <div className="relative bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-3xl p-10 shadow-2xl mb-8 overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+        <div className="relative bg-gray-900 text-white rounded-lg p-8 shadow-sm mb-8 overflow-hidden">
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2"></div>
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2">
-              <WalletIcon className="w-6 h-6 text-emerald-100" />
-              <p className="text-emerald-100">Available Balance</p>
+              <WalletIcon className="w-6 h-6 text-gray-300" />
+              <p className="text-gray-300">Available Balance</p>
             </div>
             <p className="text-6xl font-bold mb-4">₹{Number(data.balanceRs).toLocaleString('en-IN')}</p>
-            <p className="text-emerald-100 text-sm">
+            <p className="text-gray-300 text-sm">
               {data.lastTransactionAt
                 ? `Last transaction: ${formatDateLocal(data.lastTransactionAt, 'short')}`
                 : 'No transactions yet'}
@@ -303,7 +302,7 @@ export const Wallet: React.FC = () => {
                       min="1"
                       max="100000"
                       step="1"
-                      className="w-full pl-10 pr-4 py-4 text-2xl font-semibold border-2 border-gray-300 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none"
+                      className="w-full pl-10 pr-4 py-4 text-2xl font-semibold border-2 border-gray-300 rounded-xl focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none"
                       autoFocus
                     />
                   </div>
@@ -319,7 +318,7 @@ export const Wallet: React.FC = () => {
                         key={amt}
                         type="button"
                         onClick={() => setAmount(amt.toString())}
-                        className="py-2 px-3 text-sm font-medium border-2 border-gray-300 rounded-lg hover:border-emerald-500 hover:bg-emerald-50 transition-colors"
+                        className="py-2 px-3 text-sm font-medium border-2 border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors"
                       >
                         ₹{amt}
                       </button>

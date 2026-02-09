@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Droplet } from 'lucide-react';
 import { getApiUrl } from '../../config/api';
 
 export const DeliveryLogin: React.FC = () => {
@@ -12,10 +11,9 @@ export const DeliveryLogin: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
-      // Use delivery-specific auth endpoint
-                const response = await fetch(getApiUrl('/api/auth/delivery/login'), {
+      const response = await fetch(getApiUrl('/api/auth/delivery/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -40,45 +38,45 @@ export const DeliveryLogin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brown-50 to-cream-100 flex items-center justify-center py-12 px-4">
-      <div className="max-w-md w-full bg-white rounded-3xl p-10 shadow-2xl border border-brown-200">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">
+      <div className="max-w-sm w-full bg-white rounded-lg p-8 shadow-sm border border-gray-200">
         <div className="flex justify-center mb-6">
           <img
             src="/Maa Illay Remove Background (1).png"
             alt="Maa Ilay Logo"
-            className="h-16 w-auto object-contain"
+            className="h-14 w-auto object-contain"
           />
         </div>
 
-        <h1 className="text-3xl font-bold text-neutral-700 text-center mb-2">Delivery Portal</h1>
-        <p className="text-center text-neutral-600 mb-8">Login to manage deliveries</p>
+        <h1 className="text-xl font-semibold text-gray-900 text-center mb-1">Delivery Portal</h1>
+        <p className="text-center text-sm text-gray-500 mb-8">Login to manage deliveries</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">Phone Number</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone Number</label>
             <input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+91 98765 43210"
-              className="w-full px-4 py-3 border-2 border-brown-300 rounded-lg focus:border-brand focus:ring-2 focus:ring-brown-200 transition-colors outline-none"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-green-800 focus:ring-2 focus:ring-green-800/10 transition-colors outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">Password</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-4 py-3 border-2 border-brown-300 rounded-lg focus:border-brand focus:ring-2 focus:ring-brown-200 transition-colors outline-none"
+              placeholder="Enter password"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-green-800 focus:ring-2 focus:ring-green-800/10 transition-colors outline-none"
             />
           </div>
 
           <button
             type="submit"
-            className="w-full py-4 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl font-semibold shadow-lg hover:scale-105 hover:shadow-xl transition-all duration-300"
+            className="w-full py-2.5 bg-green-800 text-white rounded-lg text-sm font-medium hover:bg-green-900 transition-colors duration-200"
           >
             Login to Delivery Portal
           </button>

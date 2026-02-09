@@ -19,7 +19,7 @@ export const DeliveryGuard: React.FC<DeliveryGuardProps> = ({ children }) => {
   if (mustChange === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-10 h-10 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }

@@ -189,7 +189,7 @@ export const CustomerAction: React.FC = () => {
             <div className="h-6 bg-gray-100 rounded w-3/4" />
           </div>
           <div className="flex items-center gap-2 text-gray-500">
-            <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
             <span>Loading customer...</span>
           </div>
         </div>
@@ -305,8 +305,8 @@ export const CustomerAction: React.FC = () => {
                 <button
                   onClick={() => setDeliveryStatus('DELIVERED')}
                   className={`py-6 rounded-xl font-bold text-lg flex flex-col items-center gap-3 transition-all ${deliveryStatus === 'DELIVERED'
-                    ? 'bg-emerald-500 text-white scale-105'
-                    : 'bg-white border-2 border-gray-300 hover:border-emerald-500'
+                    ? 'bg-green-500 text-white scale-105'
+                    : 'bg-white border-2 border-gray-300 hover:border-green-500'
                     }`}
                 >
                   <CheckCircle className="w-8 h-8" />
@@ -369,10 +369,10 @@ export const CustomerAction: React.FC = () => {
                 >
                   <Minus className="w-5 h-5" />
                 </button>
-                <span className="text-2xl font-bold text-emerald-600 w-8 text-center">{largeCollected}</span>
+                <span className="text-2xl font-bold text-green-800 w-8 text-center">{largeCollected}</span>
                 <button
                   onClick={() => setLargeCollected(largeCollected + 1)}
-                  className="w-12 h-12 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 flex items-center justify-center"
+                  className="w-12 h-12 bg-green-500 text-white rounded-xl hover:bg-green-800 flex items-center justify-center"
                 >
                   <Plus className="w-5 h-5" />
                 </button>
@@ -385,10 +385,10 @@ export const CustomerAction: React.FC = () => {
                 >
                   <Minus className="w-5 h-5" />
                 </button>
-                <span className="text-2xl font-bold text-emerald-600 w-8 text-center">{smallCollected}</span>
+                <span className="text-2xl font-bold text-green-800 w-8 text-center">{smallCollected}</span>
                 <button
                   onClick={() => setSmallCollected(smallCollected + 1)}
-                  className="w-12 h-12 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 flex items-center justify-center"
+                  className="w-12 h-12 bg-green-500 text-white rounded-xl hover:bg-green-800 flex items-center justify-center"
                 >
                   <Plus className="w-5 h-5" />
                 </button>
