@@ -216,6 +216,19 @@ app.use('/api/delivery', csrfProtection, deliveryRoutes);
 // Admin routes with CSRF protection and admin rate limiting
 app.use('/api/admin', adminLimiter, csrfProtection, adminRoutes);
 
+// Root route - Welcome message
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Welcome to Maa Ilay API',
+    version: '1.0.0',
+    status: 'running',
+    endpoints: {
+      health: '/health',
+      api: '/api',
+      docs: 'API documentation available at /api/docs (if configured)'
+    }
+  });
+});
 
 // ============================================================================
 // ERROR HANDLING

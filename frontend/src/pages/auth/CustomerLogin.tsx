@@ -1,7 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Droplet, Mail } from 'lucide-react';
 
 export const CustomerLogin: React.FC = () => {
   const navigate = useNavigate();
@@ -34,7 +33,7 @@ export const CustomerLogin: React.FC = () => {
 
         <button
           onClick={() => handleLogin('google')}
-          className="w-full bg-white border-2 border-brown-300 py-4 rounded-xl font-semibold flex items-center justify-center gap-3 hover:border-brand hover:shadow-lg transition-all duration-300 mb-4"
+          className="w-full bg-white border-2 border-brown-300 py-4 rounded-xl font-semibold flex items-center justify-center gap-3 hover:border-brand hover:shadow-lg transition-all duration-300"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
@@ -56,30 +55,6 @@ export const CustomerLogin: React.FC = () => {
           </svg>
           Continue with Google
         </button>
-
-        <div className="flex items-center gap-4 my-6">
-          <div className="flex-1 h-px bg-brown-200"></div>
-          <span className="text-sm text-neutral-500">OR</span>
-          <div className="flex-1 h-px bg-brown-200"></div>
-        </div>
-
-        <button
-          onClick={() => handleLogin('email')}
-          className="w-full bg-white border-2 border-brown-300 py-4 rounded-xl font-semibold flex items-center justify-center gap-3 hover:border-brand hover:shadow-lg transition-all duration-300"
-        >
-          <Mail className="w-5 h-5 text-brand" />
-          Login with Email
-        </button>
-
-        <p className="text-center text-sm text-neutral-600 mt-6">
-          New user?{' '}
-          <button
-            onClick={() => handleLogin('register')}
-            className="text-brand font-semibold hover:text-brand-hover"
-          >
-            Register here
-          </button>
-        </p>
       </div>
     </div>
   );
