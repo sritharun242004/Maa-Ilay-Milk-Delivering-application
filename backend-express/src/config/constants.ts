@@ -108,7 +108,7 @@ export const RATE_LIMITS = {
    */
   API: {
     WINDOW_MS: 15 * 60 * 1000, // 15 minutes
-    MAX_REQUESTS: 100,
+    MAX_REQUESTS: 1000, // TEMP: Was 100, increased for dev
     WINDOW_NAME: '15 minutes',
   },
 

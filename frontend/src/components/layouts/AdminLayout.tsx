@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   ClipboardList,
+  IndianRupee,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -37,6 +38,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { path: '/admin/customers', label: 'Customers', icon: Users },
     { path: '/admin/delivery-team', label: 'Delivery Team', icon: Truck },
     { path: '/admin/inventory', label: 'Inventory', icon: Package },
+    { path: '/admin/payments', label: 'Payments', icon: IndianRupee },
     { path: '/admin/penalties', label: 'Penalties', icon: AlertCircle },
     { path: '/admin/reports', label: 'Reports', icon: FileText },
     { path: '/admin/settings', label: 'Settings', icon: Settings },

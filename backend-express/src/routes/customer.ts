@@ -184,6 +184,7 @@ router.get('/dashboard', isAuthenticated, isCustomer, async (req, res) => {
       where: { id: req.user.id },
       include: {
         Subscription: true,
+        DeliveryPerson: { select: { name: true, phone: true } },
         Wallet: {
           include: {
             WalletTransaction: {
@@ -275,6 +276,11 @@ router.get('/dashboard', isAuthenticated, isCustomer, async (req, res) => {
           pincode: customer.pincode,
         },
         status: customer.status,
+        approvedAt: customer.approvedAt,
+        createdAt: customer.createdAt,
+        deliveryPerson: customer.DeliveryPerson
+          ? { name: customer.DeliveryPerson.name, phone: customer.DeliveryPerson.phone }
+          : null,
         walletBalanceRs: walletBalanceRs.toFixed(2),
       },
       subscription: sub

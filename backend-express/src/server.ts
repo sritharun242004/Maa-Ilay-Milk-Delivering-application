@@ -175,8 +175,12 @@ app.use(passport.session());
 // ============================================================================
 // Apply rate limiting to all API routes to prevent abuse
 
-// General API rate limiting (applies to all /api/* routes except specific overrides)
-app.use('/api/', apiLimiter);
+// General API rate limiting (applies to all /api/* routes except auth which has its own limiter)
+app.use('/api/', (req, res, next) => {
+  // Skip general limiter for auth routes — they use authLimiter instead
+  if (req.path.startsWith('/auth')) return next();
+  return apiLimiter(req, res, next);
+});
 
 // ============================================================================
 // ROUTES

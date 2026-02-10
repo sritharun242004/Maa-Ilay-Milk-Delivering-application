@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { CustomerLayout } from '../../components/layouts/CustomerLayout';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { User, Mail, Phone, MapPin, Edit2, Save, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Edit2, Save, X, CheckCircle, AlertCircle, CalendarCheck } from 'lucide-react';
 import { fetchWithCsrf } from '../../utils/csrf';
 import { getApiUrl } from '../../config/api';
+import { AddressAutocomplete } from '../../components/AddressAutocomplete';
 
 type ProfileData = {
   id: string;
@@ -19,6 +20,8 @@ type ProfileData = {
     pincode: string;
   };
   status: string;
+  approvedAt: string | null;
+  createdAt: string;
 };
 
 type FormData = {
@@ -201,12 +204,15 @@ export const Profile: React.FC = () => {
         {/* Profile Header Card */}
         <div className="bg-gray-900 rounded-lg p-6 mb-6 text-white">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold">
+            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold text-white">
               {profile?.name ? getInitials(profile.name) : 'U'}
             </div>
             <div>
-              <h2 className="text-2xl font-bold">{profile?.name || 'User'}</h2>
+              <h2 className="text-2xl font-bold text-white">{profile?.name || 'User'}</h2>
               <p className="text-gray-300">{profile?.email}</p>
+              <p className="text-gray-400 text-sm mt-1">
+                Joined {new Date(profile?.approvedAt || profile?.createdAt || '').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </p>
             </div>
           </div>
         </div>
@@ -302,7 +308,26 @@ export const Profile: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Address Line 1 <span className="text-red-500">*</span>
+                        Search Address
+                      </label>
+                      <AddressAutocomplete
+                        onPlaceSelected={(place) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            addressLine1: place.addressLine1 || prev.addressLine1,
+                            addressLine2: place.addressLine2 || prev.addressLine2,
+                            city: place.city || prev.city,
+                            pincode: place.pincode || prev.pincode,
+                          }))
+                        }
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Search to auto-fill, or edit manually below</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Door No. <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
@@ -311,7 +336,7 @@ export const Profile: React.FC = () => {
                         className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${
                           formErrors.addressLine1 ? 'border-red-300 bg-red-50' : 'border-gray-200'
                         }`}
-                        placeholder="House/Flat No., Building Name, Street"
+                        placeholder="e.g. 12/3, Plot No. 5"
                       />
                       {formErrors.addressLine1 && (
                         <p className="text-red-500 text-sm mt-1">{formErrors.addressLine1}</p>

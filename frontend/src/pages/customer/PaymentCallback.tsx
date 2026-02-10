@@ -17,7 +17,9 @@ export const PaymentCallback: React.FC = () => {
   const [walletBalance, setWalletBalance] = useState(0);
 
   useEffect(() => {
-    verifyPayment();
+    // Small delay to let cookies/session settle after external redirect from payment gateway
+    const timer = setTimeout(() => verifyPayment(), 500);
+    return () => clearTimeout(timer);
   }, []);
 
   const verifyPayment = async () => {

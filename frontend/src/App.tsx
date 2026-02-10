@@ -40,6 +40,7 @@ const BottlesOut = React.lazy(() => import('./pages/admin/BottlesOut').then(m =>
 const AdminDeliveries = React.lazy(() => import('./pages/admin/Deliveries').then(m => ({ default: m.AdminDeliveries })));
 const DeliveryTeam = React.lazy(() => import('./pages/admin/SimpleAdminPages').then(m => ({ default: m.DeliveryTeam })));
 const Inventory = React.lazy(() => import('./pages/admin/SimpleAdminPages').then(m => ({ default: m.Inventory })));
+const AdminPayments = React.lazy(() => import('./pages/admin/Payments').then(m => ({ default: m.AdminPayments })));
 const Penalties = React.lazy(() => import('./pages/admin/SimpleAdminPages').then(m => ({ default: m.Penalties })));
 const Reports = React.lazy(() => import('./pages/admin/SimpleAdminPages').then(m => ({ default: m.Reports })));
 const Settings = React.lazy(() => import('./pages/admin/SimpleAdminPages').then(m => ({ default: m.Settings })));
@@ -184,6 +185,14 @@ function App() {
                 element={
                   <ProtectedRoute allowedUserType="admin">
                     <Inventory />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/payments"
+                element={
+                  <ProtectedRoute allowedUserType="admin">
+                    <AdminPayments />
                   </ProtectedRoute>
                 }
               />

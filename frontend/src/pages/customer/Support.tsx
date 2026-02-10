@@ -1,11 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CustomerLayout } from '../../components/layouts/CustomerLayout';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Phone, Mail, MessageSquare, ChevronDown } from 'lucide-react';
+import { Phone, Mail, MessageSquare, ChevronDown, Truck } from 'lucide-react';
+import { getApiUrl } from '../../config/api';
+
+type DeliveryPersonInfo = { name: string; phone: string } | null;
 
 export const Support: React.FC = () => {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [deliveryPerson, setDeliveryPerson] = useState<DeliveryPersonInfo>(null);
+
+  useEffect(() => {
+    fetch(getApiUrl('/api/customer/dashboard'), { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => {
+        setDeliveryPerson(data.customer?.deliveryPerson || null);
+      })
+      .catch(() => {});
+  }, []);
+
   const [formData, setFormData] = useState({
     subject: '',
     description: '',
@@ -73,6 +87,16 @@ export const Support: React.FC = () => {
                     value: '+91 98765 43210',
                     subtext: 'Quick support',
                   },
+                ...(deliveryPerson
+                  ? [
+                      {
+                        icon: Truck,
+                        label: 'Delivery Person',
+                        value: deliveryPerson.name,
+                        subtext: deliveryPerson.phone,
+                      },
+                    ]
+                  : []),
                 ].map((contact, index) => (
                   <div
                     key={index}

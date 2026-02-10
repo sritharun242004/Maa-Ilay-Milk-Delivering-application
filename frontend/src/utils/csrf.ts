@@ -58,9 +58,27 @@ export async function fetchWithCsrf(
   const headers = new Headers(options.headers);
   headers.set('X-CSRF-Token', token);
 
-  return fetch(getApiUrl(url), {
+  const response = await fetch(getApiUrl(url), {
     ...options,
     credentials: 'include',
     headers,
   });
+
+  // Auto-retry once on CSRF failure (handles stale tokens after external redirects)
+  if (response.status === 403) {
+    const data = await response.clone().json().catch(() => null);
+    if (data?.code === 'CSRF_VALIDATION_FAILED' || data?.error?.includes('CSRF')) {
+      clearCsrfToken();
+      const freshToken = await fetchCsrfToken();
+      const retryHeaders = new Headers(options.headers);
+      retryHeaders.set('X-CSRF-Token', freshToken);
+      return fetch(getApiUrl(url), {
+        ...options,
+        credentials: 'include',
+        headers: retryHeaders,
+      });
+    }
+  }
+
+  return response;
 }

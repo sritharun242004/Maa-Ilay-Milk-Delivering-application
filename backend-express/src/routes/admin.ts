@@ -341,6 +341,84 @@ router.get('/deliveries-history', isAuthenticated, isAdmin, async (req, res) => 
   }
 });
 
+// Export deliveries as CSV
+router.get('/deliveries-export', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const dateStr = req.query.date as string;
+    const dateFrom = req.query.dateFrom as string;
+    const dateTo = req.query.dateTo as string;
+    const deliveryPersonId = req.query.deliveryPersonId as string;
+    const status = req.query.status as string;
+
+    const where: any = {};
+
+    if (dateStr) {
+      const range = getDateRangeForDateColumn(dateStr);
+      where.deliveryDate = { gte: range.start, lte: range.end };
+    } else if (dateFrom || dateTo) {
+      where.deliveryDate = {};
+      if (dateFrom) {
+        const fromRange = getDateRangeForDateColumn(dateFrom);
+        where.deliveryDate.gte = fromRange.start;
+      }
+      if (dateTo) {
+        const toRange = getDateRangeForDateColumn(dateTo);
+        where.deliveryDate.lte = toRange.end;
+      }
+    } else {
+      const todayIST = toISTDateString(new Date());
+      const range = getDateRangeForDateColumn(todayIST);
+      where.deliveryDate = { gte: range.start, lte: range.end };
+    }
+
+    if (deliveryPersonId) where.deliveryPersonId = deliveryPersonId;
+    if (status && status !== 'ALL') where.status = status;
+
+    const deliveries = await prisma.delivery.findMany({
+      where,
+      include: {
+        Customer: { select: { name: true, phone: true } },
+        DeliveryPerson: { select: { name: true } },
+      },
+      orderBy: [{ deliveryDate: 'desc' }, { deliveredAt: 'desc' }],
+    });
+
+    const todayStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const title = `"Maa Ilay Deliveries - ${todayStr}"`;
+    const header = 'S.No,Date,Customer,Phone,Quantity,Bottles,Delivered By,Status,Time';
+    const csvRows = deliveries.map((d, i) => {
+      const dateVal = new Date(d.deliveryDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      const qty = d.quantityMl >= 1000 ? `${d.quantityMl / 1000}L` : `${d.quantityMl}ml`;
+      const bottles = [
+        d.largeBottles > 0 ? `${d.largeBottles}x1L` : '',
+        d.smallBottles > 0 ? `${d.smallBottles}x500ml` : '',
+      ].filter(Boolean).join(' + ');
+      const time = d.deliveredAt
+        ? new Date(d.deliveredAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+        : '';
+      return [
+        i + 1,
+        dateVal,
+        `"${d.Customer.name.replace(/"/g, '""')}"`,
+        d.Customer.phone,
+        qty,
+        bottles,
+        d.DeliveryPerson?.name || 'Unassigned',
+        d.status,
+        time,
+      ].join(',');
+    });
+
+    const csv = [title, header, ...csvRows].join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=deliveries.csv');
+    res.send(csv);
+  } catch (e) {
+    console.error('Admin deliveries export error:', e);
+    res.status(500).json({ error: 'Failed to export deliveries' });
+  }
+});
+
 // Get deliveries by date (for date navigation in Today's Deliveries page)
 router.get('/deliveries-by-date', isAuthenticated, isAdmin, async (req, res) => {
   try {
@@ -469,6 +547,7 @@ router.get('/customers', isAuthenticated, isAdmin, async (req, res) => {
         include: {
           Subscription: { select: { dailyQuantityMl: true } },
           DeliveryPerson: { select: { id: true, name: true } },
+          Wallet: { select: { balancePaise: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -482,7 +561,7 @@ router.get('/customers', isAuthenticated, isAdmin, async (req, res) => {
       name: c.name,
       email: c.email,
       phone: c.phone,
-      address: `${c.addressLine1}${c.addressLine2 ? ', ' + c.addressLine2 : ''}, ${c.pincode}`,
+      walletBalanceRs: c.Wallet ? (c.Wallet.balancePaise / 100).toFixed(2) : '0.00',
       plan: c.Subscription
         ? c.Subscription.dailyQuantityMl >= 1000
           ? `${c.Subscription.dailyQuantityMl / 1000}L`
@@ -515,6 +594,75 @@ router.get('/customers', isAuthenticated, isAdmin, async (req, res) => {
   } catch (e) {
     console.error('Admin customers error:', e);
     res.status(500).json({ error: 'Failed to load customers' });
+  }
+});
+
+// Export customers as CSV (respects filters)
+router.get('/customers-export', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const statusFilter = req.query.status as string | undefined;
+
+    const where = {
+      ...(search
+        ? {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' as const } },
+            { email: { contains: search, mode: 'insensitive' as const } },
+            { phone: { contains: search } },
+          ],
+        }
+        : {}),
+      ...(statusFilter && statusFilter !== 'all' ? { status: statusFilter as any } : {}),
+    };
+
+    const customers = await prisma.customer.findMany({
+      where,
+      include: {
+        Subscription: { select: { dailyQuantityMl: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const rows = customers.map((c, i) => ({
+      sno: i + 1,
+      name: c.name,
+      phone: c.phone,
+      email: c.email,
+      address: `${c.addressLine1}${c.addressLine2 ? ', ' + c.addressLine2 : ''}, ${c.city} ${c.pincode}`,
+      onboardedDate: c.approvedAt
+        ? new Date(c.approvedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+        : '',
+      plan: c.Subscription
+        ? c.Subscription.dailyQuantityMl >= 1000
+          ? `${c.Subscription.dailyQuantityMl / 1000}L`
+          : `${c.Subscription.dailyQuantityMl}ml`
+        : '',
+    }));
+
+    // Build CSV
+    const todayStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const title = `"Maa Ilay Customer's - ${todayStr}"`;
+    const header = 'S.No,Name,Phone,Email,Address,Onboarded Date,Plan';
+    const csvRows = rows.map((r) =>
+      [
+        r.sno,
+        `"${r.name.replace(/"/g, '""')}"`,
+        r.phone,
+        r.email,
+        `"${r.address.replace(/"/g, '""')}"`,
+        r.onboardedDate,
+        r.plan,
+      ].join(',')
+    );
+    const csv = [title, header, ...csvRows].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=customers.csv');
+    res.send(csv);
+  } catch (e) {
+    console.error('Admin customers export error:', e);
+    res.status(500).json({ error: 'Failed to export customers' });
   }
 });
 
@@ -612,6 +760,7 @@ router.get('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
         pincode: customer.pincode,
         status: customer.status,
         deliveryNotes: customer.deliveryNotes,
+        approvedAt: customer.approvedAt,
         deliveryPerson: customer.DeliveryPerson
           ? { id: customer.DeliveryPerson.id, name: customer.DeliveryPerson.name }
           : null,
@@ -691,6 +840,9 @@ router.patch('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
 
         // When assigning a delivery person, activate the customer if they're pending
         if (existing.status === 'PENDING_APPROVAL') {
+          data.approvedAt = new Date();
+          data.approvedBy = req.user?.id ?? null;
+
           // Charge first bottle deposit
           if (existing.Subscription && existing.Wallet) {
             const { calculateBottleDepositPaise } = await import('../config/pricing');
@@ -1242,6 +1394,160 @@ router.get('/penalties', isAuthenticated, isAdmin, async (req, res) => {
   } catch (e) {
     console.error('Admin penalties error:', e);
     res.status(500).json({ error: 'Failed to load penalty statistics' });
+  }
+});
+
+// Get payment records (wallet top-ups) with customer info
+router.get('/payments', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(10, parseInt(req.query.limit as string) || 50));
+    const skip = (page - 1) * limit;
+
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const dateFrom = req.query.dateFrom as string | undefined;
+    const dateTo = req.query.dateTo as string | undefined;
+
+    // Build where clause
+    const where: any = {
+      type: 'WALLET_TOPUP',
+    };
+
+    // Date filter
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) {
+        const fromRange = getDateRangeForDateColumn(dateFrom);
+        where.createdAt.gte = fromRange.start;
+      }
+      if (dateTo) {
+        const toRange = getDateRangeForDateColumn(dateTo);
+        where.createdAt.lte = toRange.end;
+      }
+    }
+
+    // Search by customer name
+    if (search) {
+      where.Wallet = {
+        Customer: {
+          name: { contains: search, mode: 'insensitive' },
+        },
+      };
+    }
+
+    const [transactions, total] = await Promise.all([
+      prisma.walletTransaction.findMany({
+        where,
+        include: {
+          Wallet: {
+            include: {
+              Customer: {
+                select: { name: true, phone: true },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.walletTransaction.count({ where }),
+    ]);
+
+    // Calculate total amount for the filtered set
+    const totalAmountResult = await prisma.walletTransaction.aggregate({
+      where,
+      _sum: { amountPaise: true },
+    });
+
+    const payments = transactions.map((t) => ({
+      id: t.id,
+      date: t.createdAt,
+      customerName: t.Wallet.Customer.name,
+      customerPhone: t.Wallet.Customer.phone,
+      amountPaise: t.amountPaise,
+      amountRs: (t.amountPaise / 100).toFixed(2),
+      description: t.description,
+      referenceId: t.referenceId,
+    }));
+
+    const totalPages = Math.ceil(total / limit);
+
+    res.json({
+      payments,
+      total,
+      page,
+      limit,
+      totalPages,
+      totalAmountRs: ((totalAmountResult._sum.amountPaise || 0) / 100).toFixed(2),
+    });
+  } catch (e) {
+    console.error('Admin payments error:', e);
+    res.status(500).json({ error: 'Failed to fetch payments' });
+  }
+});
+
+// Export payments as CSV
+router.get('/payments-export', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const dateFrom = req.query.dateFrom as string | undefined;
+    const dateTo = req.query.dateTo as string | undefined;
+
+    const where: any = { type: 'WALLET_TOPUP' };
+
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) {
+        const fromRange = getDateRangeForDateColumn(dateFrom);
+        where.createdAt.gte = fromRange.start;
+      }
+      if (dateTo) {
+        const toRange = getDateRangeForDateColumn(dateTo);
+        where.createdAt.lte = toRange.end;
+      }
+    }
+
+    if (search) {
+      where.Wallet = {
+        Customer: { name: { contains: search, mode: 'insensitive' } },
+      };
+    }
+
+    const transactions = await prisma.walletTransaction.findMany({
+      where,
+      include: {
+        Wallet: {
+          include: {
+            Customer: { select: { name: true, phone: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const todayStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const title = `"Maa Ilay Payments - ${todayStr}"`;
+    const header = 'S.No,Date,Customer,Phone,Amount';
+    const csvRows = transactions.map((t, i) => {
+      const dateVal = new Date(t.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      const amountRs = (t.amountPaise / 100).toFixed(2);
+      return [
+        i + 1,
+        dateVal,
+        `"${t.Wallet.Customer.name.replace(/"/g, '""')}"`,
+        t.Wallet.Customer.phone,
+        amountRs,
+      ].join(',');
+    });
+
+    const csv = [title, header, ...csvRows].join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=payments.csv');
+    res.send(csv);
+  } catch (e) {
+    console.error('Admin payments export error:', e);
+    res.status(500).json({ error: 'Failed to export payments' });
   }
 });
 

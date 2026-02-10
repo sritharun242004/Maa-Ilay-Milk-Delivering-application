@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { MapPin, Phone, Home, User, CheckCircle, AlertCircle } from 'lucide-react';
 import { fetchWithCsrf, clearCsrfToken } from '../../utils/csrf';
 import { getApiUrl } from '../../config/api';
+import { AddressAutocomplete } from '../../components/AddressAutocomplete';
 
 export const CustomerOnboarding: React.FC = () => {
   const navigate = useNavigate();
@@ -167,7 +168,26 @@ export const CustomerOnboarding: React.FC = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Address Line 1 <span className="text-red-500">*</span>
+                Search Address
+              </label>
+              <AddressAutocomplete
+                onPlaceSelected={(place) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    addressLine1: place.addressLine1 || prev.addressLine1,
+                    addressLine2: place.addressLine2 || prev.addressLine2,
+                    city: place.city || prev.city,
+                    pincode: place.pincode || prev.pincode,
+                  }))
+                }
+                className={inputClasses}
+              />
+              <p className="text-xs text-gray-400">Search to auto-fill your address, or type manually below</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Door No. <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -175,7 +195,7 @@ export const CustomerOnboarding: React.FC = () => {
                 value={formData.addressLine1}
                 onChange={handleChange}
                 required
-                placeholder="House/Flat No., Building Name, Street"
+                placeholder="e.g. 12/3, Plot No. 5"
                 className={inputClasses}
               />
             </div>

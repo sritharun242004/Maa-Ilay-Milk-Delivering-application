@@ -3,7 +3,7 @@ import { AdminLayout } from '../../components/layouts/AdminLayout';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { getApiUrl } from '../../config/api';
-import { Search, ChevronLeft, ChevronRight, RefreshCw, Filter } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, RefreshCw, Filter, Download } from 'lucide-react';
 
 type DeliveryRow = {
   id: string;
@@ -76,6 +76,7 @@ export const AdminDeliveries: React.FC = () => {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -140,6 +141,40 @@ export const AdminDeliveries: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setExporting(true);
+                const params = new URLSearchParams();
+                if (useRange) {
+                  if (dateFrom) params.set('dateFrom', dateFrom);
+                  if (dateTo) params.set('dateTo', dateTo);
+                } else {
+                  params.set('date', date);
+                }
+                if (deliveryPersonId) params.set('deliveryPersonId', deliveryPersonId);
+                if (status !== 'ALL') params.set('status', status);
+                fetch(getApiUrl(`/api/admin/deliveries-export?${params.toString()}`), { credentials: 'include' })
+                  .then((res) => {
+                    if (!res.ok) throw new Error('Export failed');
+                    return res.blob();
+                  })
+                  .then((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'deliveries.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  })
+                  .catch(() => alert('Failed to export deliveries'))
+                  .finally(() => setExporting(false));
+              }}
+              disabled={exporting}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-green-800 text-white rounded-lg hover:bg-green-900 transition-colors disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              {exporting ? 'Exporting...' : 'Export'}
+            </button>
             <button
               onClick={goToday}
               className="px-3 py-2 text-sm font-medium bg-green-800 text-white rounded-lg hover:bg-green-900 transition-colors"
@@ -231,8 +266,6 @@ export const AdminDeliveries: React.FC = () => {
                 <option value="SCHEDULED">Scheduled</option>
                 <option value="NOT_DELIVERED">Not Delivered</option>
                 <option value="PAUSED">Paused</option>
-                <option value="BLOCKED">Blocked</option>
-                <option value="HOLIDAY">Holiday</option>
               </select>
             </div>
 

@@ -316,12 +316,11 @@ export const Subscription: React.FC = () => {
             )}
           </div>
 
-          {/* Info about charges */}
+          {/* Custom quantity note */}
           <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm text-blue-900">
               <Info className="w-4 h-4 inline mr-2" />
-              <strong>How billing works:</strong> Money is deducted from your wallet only when delivery is completed.
-              Make sure to maintain sufficient balance in your wallet.
+              For custom quantity requirements, please contact the admin.
             </p>
           </div>
         </Card>

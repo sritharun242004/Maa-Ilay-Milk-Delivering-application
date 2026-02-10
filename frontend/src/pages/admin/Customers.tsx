@@ -4,7 +4,7 @@ import { AdminLayout } from '../../components/layouts/AdminLayout';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Search, MoreVertical, User, X, Calendar, Wallet, Package, Receipt, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, MoreVertical, User, X, Calendar, Wallet, Package, Receipt, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { formatDateLocal } from '../../lib/date';
 import { useDeliveryTeam } from '../../hooks/useCachedData';
 import { fetchWithCsrf } from '../../utils/csrf';
@@ -14,7 +14,7 @@ type CustomerRow = {
   name: string;
   email: string;
   phone: string;
-  address: string;
+  walletBalanceRs: string;
   plan: string;
   status: string;
   deliveryPersonId: string | null;
@@ -34,6 +34,7 @@ type CustomerDetail = {
     pincode: string;
     status: string;
     deliveryNotes: string | null;
+    approvedAt: string | null;
     deliveryPerson: { id: string; name: string } | null;
   };
   wallet: { balancePaise: number; balanceRs: string } | null;
@@ -89,6 +90,7 @@ export const AdminCustomers: React.FC = () => {
   const [selectedDeliveryDate, setSelectedDeliveryDate] = useState<string | null>(null);
   const [deliveryDetails, setDeliveryDetails] = useState<any>(null);
   const [deliveryDetailsLoading, setDeliveryDetailsLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -260,9 +262,39 @@ export const AdminCustomers: React.FC = () => {
   return (
     <AdminLayout>
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Customers</h1>
-          <p className="text-gray-600">Manage customer subscriptions. Click a row to view full profile.</p>
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">Customers</h1>
+            <p className="text-gray-600">Manage customer subscriptions. Click a row to view full profile.</p>
+          </div>
+          <button
+            onClick={() => {
+              setExporting(true);
+              const params = new URLSearchParams();
+              if (search) params.set('search', search);
+              if (statusFilter !== 'all') params.set('status', statusFilter);
+              fetch(`/api/admin/customers-export?${params.toString()}`, { credentials: 'include' })
+                .then((res) => {
+                  if (!res.ok) throw new Error('Export failed');
+                  return res.blob();
+                })
+                .then((blob) => {
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'customers.csv';
+                  a.click();
+                  URL.revokeObjectURL(url);
+                })
+                .catch(() => alert('Failed to export customers'))
+                .finally(() => setExporting(false));
+            }}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-green-800 text-white rounded-lg hover:bg-green-900 transition-colors disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" />
+            {exporting ? 'Exporting...' : 'Export'}
+          </button>
         </div>
 
         <Card className="p-6 mb-6">
@@ -309,10 +341,10 @@ export const AdminCustomers: React.FC = () => {
                       Phone
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 uppercase">
-                      Address
+                      Plan
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 uppercase">
-                      Plan
+                      Wallet
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 uppercase">
                       Status
@@ -334,10 +366,10 @@ export const AdminCustomers: React.FC = () => {
                     >
                       <td className="py-4 px-4 font-medium text-gray-900">{customer.name}</td>
                       <td className="py-4 px-4 text-gray-600">{customer.phone}</td>
-                      <td className="py-4 px-4 text-gray-600 max-w-[200px] truncate" title={customer.address}>
-                        {customer.address}
-                      </td>
                       <td className="py-4 px-4 font-semibold">{customer.plan}</td>
+                      <td className="py-4 px-4 font-medium text-gray-900">
+                        ₹{Number(customer.walletBalanceRs).toLocaleString('en-IN')}
+                      </td>
                       <td className="py-4 px-4">
                         <Badge variant={statusVariant(customer.status) as any}>
                           {statusLabel(customer.status)}
@@ -459,6 +491,7 @@ export const AdminCustomers: React.FC = () => {
                       <div><dt className="text-gray-500">Address</dt><dd className="font-medium">{detailData.customer.addressLine1}{detailData.customer.addressLine2 ? `, ${detailData.customer.addressLine2}` : ''}, {detailData.customer.city} {detailData.customer.pincode}</dd></div>
                       {detailData.customer.deliveryNotes && <div><dt className="text-gray-500">Delivery notes</dt><dd className="font-medium">{detailData.customer.deliveryNotes}</dd></div>}
                       <div><dt className="text-gray-500">Assigned delivery person</dt><dd className="font-medium">{detailData.customer.deliveryPerson?.name ?? '—'}</dd></div>
+                      <div><dt className="text-gray-500">Customer onboarded date</dt><dd className="font-medium">{detailData.customer.approvedAt ? new Date(detailData.customer.approvedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</dd></div>
                     </dl>
                   </Card>
                   <Card className="p-4">
