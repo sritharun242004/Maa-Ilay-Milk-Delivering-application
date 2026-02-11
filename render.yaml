@@ -28,3 +28,5 @@ services:
         sync: false
       - key: CASHFREE_ENVIRONMENT
         value: SANDBOX
+      - key: VITE_GOOGLE_PLACES_API_KEY
+        sync: false
