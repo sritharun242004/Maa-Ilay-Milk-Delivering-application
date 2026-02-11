@@ -35,6 +35,11 @@ import {
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// Trust reverse proxy (Render, etc.) so secure cookies work behind HTTPS proxy
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // ============================================================================
 // ENVIRONMENT VALIDATION
 // ============================================================================
