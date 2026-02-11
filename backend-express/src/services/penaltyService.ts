@@ -269,7 +269,23 @@ export async function getFlaggedCustomersDetailed() {
     orderBy: { issuedDate: 'asc' },
   });
 
-  // Group by customer
+  // Get unique customer IDs from overdue bottles
+  const customerIds = [...new Set(overdueBottles.map(b => b.customerId))];
+
+  // Get each customer's current bottle balance (from latest ledger entry)
+  const customerBalances = new Map<string, { large: number; small: number }>();
+  for (const customerId of customerIds) {
+    const latestLedger = await prisma.bottleLedger.findFirst({
+      where: { customerId },
+      orderBy: { createdAt: 'desc' },
+    });
+    customerBalances.set(customerId, {
+      large: latestLedger?.largeBottleBalanceAfter ?? 0,
+      small: latestLedger?.smallBottleBalanceAfter ?? 0,
+    });
+  }
+
+  // Group by customer, but cap at actual current balance
   const customerMap = new Map<string, {
     id: string;
     name: string;
@@ -283,8 +299,11 @@ export async function getFlaggedCustomersDetailed() {
   }>();
 
   for (const bottle of overdueBottles) {
+    const balance = customerBalances.get(bottle.customerId);
+    // Skip customers with no bottles currently outstanding
+    if (!balance || (balance.large === 0 && balance.small === 0)) continue;
+
     const existing = customerMap.get(bottle.customerId);
-    // FIX: Use issuedDate if available, otherwise fall back to createdAt
     const bottleDate = bottle.issuedDate ? new Date(bottle.issuedDate) : new Date(bottle.createdAt);
     const daysOverdue = Math.floor((now.getTime() - bottleDate.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -311,6 +330,17 @@ export async function getFlaggedCustomersDetailed() {
         daysOverdue,
         bottleLedgerIds: [bottle.id],
       });
+    }
+  }
+
+  // Cap reported bottles at actual current balance
+  for (const [customerId, entry] of customerMap) {
+    const balance = customerBalances.get(customerId)!;
+    entry.largeBottles = Math.min(entry.largeBottles, balance.large);
+    entry.smallBottles = Math.min(entry.smallBottles, balance.small);
+    // Remove entry if after capping, no bottles remain
+    if (entry.largeBottles === 0 && entry.smallBottles === 0) {
+      customerMap.delete(customerId);
     }
   }
 
@@ -512,11 +542,27 @@ export async function getPenaltyStatistics() {
     },
   });
 
-  // Calculate pending bottle count and flagged customers
+  // Get each customer's actual current bottle balance
+  const customerIds = [...new Set(overdueBottles.map(b => b.customerId))];
+  const customerBalances = new Map<string, { large: number; small: number }>();
+  for (const customerId of customerIds) {
+    const latestLedger = await prisma.bottleLedger.findFirst({
+      where: { customerId },
+      orderBy: { createdAt: 'desc' },
+    });
+    customerBalances.set(customerId, {
+      large: latestLedger?.largeBottleBalanceAfter ?? 0,
+      small: latestLedger?.smallBottleBalanceAfter ?? 0,
+    });
+  }
+
+  // Only count customers who actually have bottles outstanding
   let totalPendingBottles = 0;
   const flaggedCustomerIds = new Set<string>();
 
   for (const bottle of overdueBottles) {
+    const balance = customerBalances.get(bottle.customerId);
+    if (!balance || (balance.large === 0 && balance.small === 0)) continue;
     totalPendingBottles += bottle.quantity;
     flaggedCustomerIds.add(bottle.customerId);
   }
