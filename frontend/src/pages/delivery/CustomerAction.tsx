@@ -143,11 +143,11 @@ export const CustomerAction: React.FC = () => {
 
           if (!retryRes.ok) {
             const retryErr = await retryRes.json().catch(() => ({}));
-            alert(retryErr.error || 'Failed to update delivery');
+            alert(retryErr.message || retryErr.error || 'Failed to update delivery');
             return;
           }
         } else {
-          alert(err.error || 'Failed to update delivery');
+          alert(err.message || err.error || 'Failed to update delivery');
           return;
         }
       }
