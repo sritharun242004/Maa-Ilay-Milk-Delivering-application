@@ -9,7 +9,6 @@ import {
   MapPin,
   Package,
   AlertCircle,
-  FileText,
   Settings,
   LogOut,
   Menu,
@@ -40,7 +39,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { path: '/admin/inventory', label: 'Inventory', icon: Package },
     { path: '/admin/payments', label: 'Payments', icon: IndianRupee },
     { path: '/admin/penalties', label: 'Penalties', icon: AlertCircle },
-    { path: '/admin/reports', label: 'Reports', icon: FileText },
     { path: '/admin/settings', label: 'Settings', icon: Settings },
   ];
 

@@ -381,7 +381,6 @@ export function validateRequiredEnvVars(): void {
     'DATABASE_URL',
     'SESSION_SECRET',
     'CSRF_SECRET',
-    'FRONTEND_URL',
   ];
 
   const missing = required.filter(key => !process.env[key]);

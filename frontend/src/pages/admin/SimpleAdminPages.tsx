@@ -976,35 +976,6 @@ function ImposeFineModal({
   );
 }
 
-export const Reports: React.FC = () => {
-  return (
-    <AdminLayout>
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold text-gray-900 mb-8">Reports</h1>
-        <div className="grid md:grid-cols-2 gap-8">
-          {[
-            { title: 'Daily Delivery Report', desc: 'All deliveries, status, revenue', color: 'green' },
-            { title: 'Customer Report', desc: 'Active customers, plans, payments', color: 'blue' },
-            { title: 'Revenue Report', desc: 'Daily/Monthly revenue breakdown', color: 'green' },
-            { title: 'Bottle Inventory Report', desc: 'Issued, collected, balance', color: 'orange' },
-          ].map((report) => (
-            <Card key={report.title} className="p-8">
-              <div className={`w-16 h-16 bg-${report.color}-100 rounded-xl flex items-center justify-center mb-4`}>
-                <div className={`w-8 h-8 bg-${report.color}-500 rounded-lg`}></div>
-              </div>
-              <h3 className="text-2xl font-bold mb-2">{report.title}</h3>
-              <p className="text-gray-600 mb-6">{report.desc}</p>
-              <button className="w-full py-3 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-800">
-                Export Report
-              </button>
-            </Card>
-          ))}
-        </div>
-      </div>
-    </AdminLayout>
-  );
-};
-
 export const Settings: React.FC = () => {
   return (
     <AdminLayout>

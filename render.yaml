@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: maa-ilay
+    runtime: node
+    region: singapore
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build && cd ../backend-express && npm install && npx prisma generate && npm run build
+    startCommand: cd backend-express && npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CSRF_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+      - key: CASHFREE_APP_ID
+        sync: false
+      - key: CASHFREE_SECRET_KEY
+        sync: false
+      - key: CASHFREE_ENVIRONMENT
+        value: SANDBOX

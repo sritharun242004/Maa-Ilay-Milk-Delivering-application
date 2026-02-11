@@ -5,6 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
+import path from 'path';
 import passport from './config/passport';
 import { validateRequiredEnvVars } from './config/constants';
 import authRoutes from './routes/auth';
@@ -100,15 +101,11 @@ app.use(helmet({
 }));
 
 // CORS - Allow frontend to make requests
-// SECURITY: In production, FRONTEND_URL must be set explicitly (no fallback to localhost)
+// In production with same-origin serving, CORS is not strictly needed but kept for flexibility
 const frontendUrl = process.env.FRONTEND_URL;
-if (!frontendUrl && process.env.NODE_ENV === 'production') {
-  console.error('✗ FRONTEND_URL must be set in production environment');
-  process.exit(1);
-}
 
 app.use(cors({
-  origin: frontendUrl || 'http://localhost:5173', // Fallback only in development
+  origin: frontendUrl || 'http://localhost:5173', // Fallback in development or same-origin production
   credentials: true, // Important: allows cookies/sessions
 }));
 
@@ -161,7 +158,7 @@ app.use(
       secure: process.env.NODE_ENV === 'production', // HTTPS in production
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      sameSite: 'lax', // Same-origin serving, no need for 'none'
     },
   })
 );
@@ -220,25 +217,42 @@ app.use('/api/delivery', csrfProtection, deliveryRoutes);
 // Admin routes with CSRF protection and admin rate limiting
 app.use('/api/admin', adminLimiter, csrfProtection, adminRoutes);
 
-// Root route - Welcome message
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Welcome to Maa Ilay API',
-    version: '1.0.0',
-    status: 'running',
-    endpoints: {
-      health: '/health',
-      api: '/api',
-      docs: 'API documentation available at /api/docs (if configured)'
+// ============================================================================
+// STATIC FILE SERVING (Production: serve frontend from same origin)
+// ============================================================================
+const frontendDistPath = path.join(__dirname, '../../frontend/dist');
+
+if (process.env.NODE_ENV === 'production') {
+  // Serve frontend static assets
+  app.use(express.static(frontendDistPath));
+
+  // SPA catch-all: serve index.html for non-API routes (client-side routing)
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/health')) {
+      return next(); // Let API/health 404s fall through to error handler
     }
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
   });
-});
+} else {
+  // Development: show API info at root
+  app.get('/', (req, res) => {
+    res.json({
+      message: 'Welcome to Maa Ilay API',
+      version: '1.0.0',
+      status: 'running',
+      endpoints: {
+        health: '/health',
+        api: '/api',
+      }
+    });
+  });
+}
 
 // ============================================================================
 // ERROR HANDLING
 // ============================================================================
 
-// 404 handler - Standardized format
+// 404 handler for API routes (non-API routes are handled by SPA catch-all in production)
 app.use((req, res) => {
   sendError(res, 404, 'Route not found', ErrorCodes.NOT_FOUND, {
     path: req.path,
