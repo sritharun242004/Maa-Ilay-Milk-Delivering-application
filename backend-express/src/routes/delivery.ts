@@ -21,6 +21,7 @@ import {
 import { deliveryActionLimiter } from '../middleware/rateLimiter';
 import { sanitizeDeliveryData } from '../utils/sanitize';
 import { ErrorCode, createErrorResponse, getErrorMessage } from '../utils/errorCodes';
+import { updateCustomerStatus } from '../utils/statusManager';
 
 const router = Router();
 
@@ -103,11 +104,9 @@ export async function ensureTodayDeliveries(deliveryPersonId: string, start: Dat
         if (subStartDate > start) return false;
       }
 
-      // Wallet balance check with grace period
-      // Business rule: Allow negative balance up to 1 day's charge (grace period)
+      // Wallet balance check: negative balance = no delivery
       const balance = c.Wallet?.balancePaise ?? 0;
-      const graceLimitPaise = -sub.dailyPricePaise;
-      if (balance < graceLimitPaise) return false; // Block if below grace limit
+      if (balance < 0) return false; // Block if balance is negative
 
       return true;
     })
@@ -246,11 +245,8 @@ router.get('/assignees', isAuthenticated, isDelivery, async (req, res) => {
       } else if (c.status === 'PENDING_APPROVAL') {
         displayStatus = 'Pending';
       } else if (c.Wallet && c.Subscription) {
-        // Check if balance is sufficient (allow grace period of one day's charge)
-        const balance = c.Wallet.balancePaise;
-        const dailyCharge = c.Subscription.dailyPricePaise;
-        const gracePaise = dailyCharge; // One day grace
-        if (balance < -gracePaise) {
+        // Negative balance = inactive
+        if (c.Wallet.balancePaise < 0) {
           displayStatus = 'Inactive';
         } else {
           displayStatus = 'Active';
@@ -410,10 +406,8 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
       if (d.status !== 'SCHEDULED') return true;
 
       // Wallet check ONLY for pending (SCHEDULED) deliveries
-      // Business rule: Allow negative balance up to 1 day's charge (grace period)
       const balance = c.Wallet?.balancePaise ?? 0;
-      const graceLimitPaise = -c.Subscription.dailyPricePaise;
-      return balance >= graceLimitPaise; // Allow if at or above grace limit
+      return balance >= 0; // Negative balance = don't show
     });
 
     // Sort: Pending (SCHEDULED) first, then processed ones at bottom
@@ -642,6 +636,41 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
     // Fetch inventory BEFORE transaction
     const inventory = await prisma.inventory.findFirst();
 
+    // Pre-check: Only block if current balance is ALREADY below grace limit
+    // This handles stale deliveries for customers who shouldn't have them (e.g., deeply negative)
+    // Customers within grace get charged normally — that IS the grace delivery
+    if (shouldChargeWallet) {
+      const charge = delivery.chargePaise || 0;
+      const wallet = delivery.Customer.Wallet;
+      if (wallet && charge > 0) {
+        if (wallet.balancePaise < 0) {
+          // Customer already negative — shouldn't have this delivery (stale row)
+          // Mark NOT_DELIVERED without charging
+          await prisma.delivery.update({
+            where: { id: deliveryId },
+            data: {
+              status: 'NOT_DELIVERED',
+              deliveryNotes: typeof body.deliveryNotes === 'string'
+                ? body.deliveryNotes
+                : 'Auto-skipped: insufficient wallet balance',
+            },
+          });
+          // Update customer status (will set to INACTIVE)
+          await updateCustomerStatus(customerId);
+          // Invalidate assignees cache
+          if (req.user) {
+            assigneesCache.invalidate(`assignees_${req.user.id}`);
+          }
+          return res.json({
+            success: true,
+            warning: 'Customer set to inactive due to insufficient balance. Delivery marked as not delivered.',
+          });
+        }
+      }
+    }
+
+    let warning: string | undefined;
+
     await prisma.$transaction(async (tx) => {
       // CRITICAL: Fetch bottle balance INSIDE transaction with SELECT FOR UPDATE lock
       // This prevents race conditions when multiple deliveries are marked concurrently
@@ -690,54 +719,44 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
             // Deduct deposit from wallet
             const wallet = delivery.Customer.Wallet;
             if (wallet) {
-              // FIX: Check if wallet has sufficient balance before charging deposit
-              // Define minimum allowed balance (can go negative by max 1 day charge - grace period)
-              const dailyCharge = delivery.chargePaise || 0;
-              const absoluteMinimumBalance = -(dailyCharge * 1); // Max 1 day negative (grace period)
-
               const newBalance = wallet.balancePaise - depositAmount;
 
-              // FIX: Prevent wallet from going below absolute minimum
-              if (newBalance < absoluteMinimumBalance) {
-                const error = createErrorResponse(
-                  ErrorCode.WALLET_BELOW_MINIMUM,
-                  `Cannot charge deposit: wallet would go below minimum allowed balance. Please top up your wallet.`,
-                  {
-                    current: (wallet.balancePaise / 100).toFixed(2),
-                    depositAmount: (depositAmount / 100).toFixed(2),
-                    minimumAllowed: (absoluteMinimumBalance / 100).toFixed(2),
-                    shortfall: ((absoluteMinimumBalance - newBalance) / 100).toFixed(2)
+              // Skip deposit if wallet would go negative (instead of throwing)
+              if (newBalance < 0) {
+                // Just increment delivery count; deposit will retry next qualifying delivery
+                await tx.subscription.update({
+                  where: { customerId },
+                  data: { deliveryCount: newDeliveryCount }
+                });
+                warning = 'Bottle deposit skipped due to insufficient balance. It will be charged when balance is sufficient.';
+              } else {
+                await tx.wallet.update({
+                  where: { id: wallet.id },
+                  data: { balancePaise: newBalance }
+                });
+
+                await tx.walletTransaction.create({
+                  data: {
+                    walletId: wallet.id,
+                    type: 'DEPOSIT_CHARGE',
+                    amountPaise: -depositAmount,
+                    balanceAfterPaise: newBalance,
+                    description: `Bottle deposit charge (${newDeliveryCount} deliveries completed)`,
+                    referenceType: 'deposit',
+                    referenceId: delivery.id
                   }
-                );
-                throw new Error(JSON.stringify(error));
+                });
+
+                // Update subscription deposit tracking
+                await tx.subscription.update({
+                  where: { customerId },
+                  data: {
+                    deliveryCount: newDeliveryCount,
+                    lastDepositAtDelivery: newDeliveryCount,
+                    lastDepositChargedAt: new Date()
+                  }
+                });
               }
-
-              await tx.wallet.update({
-                where: { id: wallet.id },
-                data: { balancePaise: newBalance }
-              });
-
-              await tx.walletTransaction.create({
-                data: {
-                  walletId: wallet.id,
-                  type: 'DEPOSIT_CHARGE',
-                  amountPaise: -depositAmount,
-                  balanceAfterPaise: newBalance,
-                  description: `Bottle deposit charge (${newDeliveryCount} deliveries completed)`,
-                  referenceType: 'deposit',
-                  referenceId: delivery.id
-                }
-              });
-
-              // Update subscription deposit tracking
-              await tx.subscription.update({
-                where: { customerId },
-                data: {
-                  deliveryCount: newDeliveryCount,
-                  lastDepositAtDelivery: newDeliveryCount,
-                  lastDepositChargedAt: new Date()
-                }
-              });
             }
           } else {
             // Just increment delivery count
@@ -755,29 +774,12 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
         if (charge > 0 && delivery.Customer.Wallet) {
           const newBalance = delivery.Customer.Wallet.balancePaise - charge;
 
-          // FIX: Enforce maximum negative balance limit
-          // Allow grace period of 1 day worth of charge maximum
-          const absoluteMinimumBalance = -(charge * 1); // Grace period: 1 day only
-
-          if (newBalance < absoluteMinimumBalance) {
-            const error = createErrorResponse(
-              ErrorCode.WALLET_BELOW_MINIMUM,
-              `Cannot charge delivery: wallet would exceed maximum negative balance. Customer needs to top up.`,
-              {
-                current: (delivery.Customer.Wallet.balancePaise / 100).toFixed(2),
-                charge: (charge / 100).toFixed(2),
-                minimumAllowed: (absoluteMinimumBalance / 100).toFixed(2),
-                newBalance: (newBalance / 100).toFixed(2)
-              }
-            );
-            throw new Error(JSON.stringify(error));
-          }
-
+          // Charge goes through — pre-check already blocked truly ineligible customers
+          // Grace period allows this charge; updateCustomerStatus will handle INACTIVE transition after
           await tx.wallet.update({
             where: { id: delivery.Customer.Wallet.id },
             data: {
               balancePaise: newBalance,
-              // FIX: Track when wallet went negative
               negativeBalanceSince: newBalance < 0 && delivery.Customer.Wallet.balancePaise >= 0
                 ? new Date()
                 : (newBalance >= 0 ? null : delivery.Customer.Wallet.negativeBalanceSince)
@@ -932,12 +934,19 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
       isolationLevel: 'Serializable' // Highest isolation for financial operations
     });
 
+    // Recalculate customer status after wallet changes (may transition to INACTIVE)
+    try {
+      await updateCustomerStatus(customerId);
+    } catch (e) {
+      console.error('Failed to update customer status after delivery:', e);
+    }
+
     // Invalidate assignees cache for this delivery person
     if (req.user) {
       assigneesCache.invalidate(`assignees_${req.user.id}`);
     }
 
-    res.json({ success: true });
+    res.json({ success: true, ...(warning && { warning }) });
   } catch (error) {
     console.error('Delivery mark error:', error);
 

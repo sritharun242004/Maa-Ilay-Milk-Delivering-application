@@ -898,10 +898,8 @@ router.patch('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
 
             // Check balance after deposit to set correct status (ACTIVE or INACTIVE)
             const balanceAfterDeposit = currentBalance - depositAmountPaise;
-            const dailyCharge = existing.Subscription.dailyPricePaise;
-            const graceLimitPaise = -dailyCharge;
 
-            if (balanceAfterDeposit >= graceLimitPaise) {
+            if (balanceAfterDeposit >= 0) {
               data.status = 'ACTIVE';
             } else {
               data.status = 'INACTIVE';
@@ -978,10 +976,9 @@ router.patch('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
       if (!existingDelivery && !isPaused) {
         const sub = customer.Subscription;
         const balance = customer.Wallet?.balancePaise ?? 0;
-        const graceLimitPaise = -sub.dailyPricePaise;
 
-        // Only create if customer has sufficient balance (including grace period)
-        if (balance >= graceLimitPaise) {
+        // Only create if customer has non-negative balance
+        if (balance >= 0) {
           const quantityMl = sub.dailyQuantityMl;
           const chargePaise = calculateDailyPricePaise(quantityMl);
 
@@ -1085,10 +1082,9 @@ router.get('/delivery-team', isAuthenticated, isAdmin, async (req, res) => {
           // If already completed/not delivered, always count it
           if (d.status !== 'SCHEDULED') return true;
 
-          // Wallet check for SCHEDULED deliveries (grace period logic)
+          // Wallet check for SCHEDULED deliveries — negative = skip
           const balance = c.Wallet?.balancePaise ?? 0;
-          const graceLimitPaise = -c.Subscription.dailyPricePaise;
-          return balance >= graceLimitPaise;
+          return balance >= 0;
         });
 
         return { id: s.id, load: visibleDeliveries.length };

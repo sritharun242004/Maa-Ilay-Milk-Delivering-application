@@ -122,13 +122,14 @@ export const CustomerAction: React.FC = () => {
       });
 
       // Handle CSRF errors by clearing cache and retrying once
+      let finalRes = res;
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
 
         if (res.status === 403 && err.error?.includes('CSRF')) {
           clearCsrfToken();
           // Retry with fresh token
-          const retryRes = await fetchWithCsrf(`/api/delivery/${data.delivery.id}/mark`, {
+          finalRes = await fetchWithCsrf(`/api/delivery/${data.delivery.id}/mark`, {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
@@ -141,8 +142,8 @@ export const CustomerAction: React.FC = () => {
             }),
           });
 
-          if (!retryRes.ok) {
-            const retryErr = await retryRes.json().catch(() => ({}));
+          if (!finalRes.ok) {
+            const retryErr = await finalRes.json().catch(() => ({}));
             alert(retryErr.message || retryErr.error || 'Failed to update delivery');
             return;
           }
@@ -150,6 +151,12 @@ export const CustomerAction: React.FC = () => {
           alert(err.message || err.error || 'Failed to update delivery');
           return;
         }
+      }
+
+      // Check for warning in response (e.g., customer set to inactive)
+      const result = await finalRes.json().catch(() => ({}));
+      if (result.warning) {
+        alert(result.warning);
       }
 
       // Clear ALL caches to force fresh data
@@ -223,6 +230,23 @@ export const CustomerAction: React.FC = () => {
       <div className="max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold text-gray-900 mb-8">Delivery Action</h1>
 
+        {/* Inactive Customer Warning */}
+        {customer.status === 'INACTIVE' && !isAlreadyCompleted && (
+          <Card className="p-6 mb-8 border-2 border-red-200 bg-red-50">
+            <div className="flex items-start gap-4">
+              <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-1" />
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-red-900 mb-2">
+                  Low Balance - Delivery will be skipped
+                </h3>
+                <p className="text-red-800">
+                  This customer has insufficient wallet balance. If you mark this delivery, it will automatically be recorded as "Not Delivered" and no charge will be applied.
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Already Completed Banner */}
         {isAlreadyCompleted && (
           <Card className="p-6 mb-8 border-2 border-blue-200 bg-blue-50">
@@ -276,7 +300,9 @@ export const CustomerAction: React.FC = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600 mb-1">Status</p>
-              <Badge variant="success">{customer.subscription?.status ?? customer.status}</Badge>
+              <Badge variant={customer.status === 'INACTIVE' ? 'error' : 'success'}>
+                {customer.status === 'INACTIVE' ? 'Inactive - Low Balance' : (customer.subscription?.status ?? customer.status)}
+              </Badge>
             </div>
           </div>
           {customer.deliveryNotes && (

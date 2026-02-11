@@ -52,12 +52,9 @@ export async function calculateCustomerStatus(customerId: string): Promise<'VISI
 
   // Check wallet balance for ACTIVE vs INACTIVE
   const walletBalance = customer.Wallet?.balancePaise ?? 0;
-  const dailyCharge = customer.Subscription.dailyPricePaise;
 
-  // Allow grace period of -1 day's charge
-  const graceLimitPaise = -dailyCharge;
-
-  if (walletBalance >= graceLimitPaise) {
+  // Balance < 0 = INACTIVE (once negative, no more deliveries until top-up)
+  if (walletBalance >= 0) {
     return 'ACTIVE';
   } else {
     return 'INACTIVE';
@@ -116,9 +113,7 @@ export async function canReceiveDelivery(customerId: string): Promise<boolean> {
     return false;
   }
 
-  // Check wallet balance (with grace period)
+  // Check wallet balance — negative = can't receive delivery
   const walletBalance = customer.Wallet?.balancePaise ?? 0;
-  const graceLimitPaise = -customer.Subscription.dailyPricePaise;
-
-  return walletBalance >= graceLimitPaise;
+  return walletBalance >= 0;
 }
