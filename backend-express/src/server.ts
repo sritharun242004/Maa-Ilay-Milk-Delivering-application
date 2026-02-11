@@ -83,7 +83,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'", "https://sdk.cashfree.com", "https://maps.googleapis.com"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://sdk.cashfree.com", "https://maps.googleapis.com", "https://*.cashfree.com"],
+      connectSrc: ["'self'", "https://sdk.cashfree.com", "https://maps.googleapis.com", "https://places.googleapis.com", "https://*.cashfree.com"],
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
