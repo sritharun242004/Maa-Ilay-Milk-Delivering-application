@@ -940,7 +940,16 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
     res.json({ success: true });
   } catch (error) {
     console.error('Delivery mark error:', error);
-    res.status(500).json({ error: 'Failed to update delivery' });
+
+    // Try to parse structured error (e.g., wallet balance, bottle collection errors)
+    if (error instanceof Error && error.message.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(error.message);
+        return res.status(parsed.statusCode || 400).json(parsed);
+      } catch { /* not JSON, fall through */ }
+    }
+
+    res.status(500).json({ error: 'Failed to update delivery', details: error instanceof Error ? error.message : String(error) });
   }
 });
 
