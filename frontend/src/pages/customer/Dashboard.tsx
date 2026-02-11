@@ -104,16 +104,18 @@ export const CustomerDashboard: React.FC = () => {
     : 'No Subscription';
 
   const subscriptionBadge = isPendingPayment
-    ? 'error' // Red badge for "Pending"
+    ? undefined // Text "Pending" is clear enough
     : isPendingApproval
-    ? undefined // No badge for "Waiting for Approval" - text label is clear enough
+    ? undefined // Text "Waiting for Approval" is clear enough
     : !hasSubscription
-    ? 'error'
+    ? undefined // Text "No Subscription" is clear enough
     : subDisplay === 'INACTIVE'
     ? 'error'
     : subDisplay === 'PAUSED'
     ? 'warning'
-    : undefined; // Green for "Active"
+    : subDisplay === 'ACTIVE'
+    ? 'success'
+    : undefined;
 
   const balanceCoversDays = data?.balanceCoversDays ?? 0;
   const subscriptionSubtext = isPendingPayment
@@ -126,7 +128,7 @@ export const CustomerDashboard: React.FC = () => {
     ? 'Delivery paused'
     : (subDisplay === 'ACTIVE' && balanceCoversDays === 1 ? '1 day grace period' : undefined);
 
-  const kpiData = [
+  const kpiData: { icon: any; label: string; value: string; badge?: string; subtext?: string; valueColor?: string }[] = [
     {
       icon: Wallet,
       label: 'Wallet Balance',
@@ -139,6 +141,11 @@ export const CustomerDashboard: React.FC = () => {
       value: subscriptionLabel,
       badge: subscriptionBadge,
       subtext: subscriptionSubtext,
+      valueColor: isPendingPayment || !hasSubscription
+        ? 'text-red-600'
+        : isPendingApproval
+        ? 'text-amber-600'
+        : undefined,
     },
     {
       icon: Truck,
@@ -281,8 +288,8 @@ export const CustomerDashboard: React.FC = () => {
               </div>
               <p className="text-xs text-gray-500 font-medium mb-0.5">{kpi.label}</p>
               <div className="flex items-center gap-2">
-                <p className={`${kpi.value === 'Waiting for Approval' ? 'text-base' : 'text-xl'} font-semibold text-gray-900`}>{kpi.value}</p>
-                {kpi.badge && <Badge variant={kpi.badge as any}>{kpi.value}</Badge>}
+                <p className={`${kpi.value === 'Waiting for Approval' || kpi.value === 'No Subscription' ? 'text-base' : 'text-xl'} font-semibold ${kpi.valueColor || 'text-gray-900'}`}>{kpi.value}</p>
+                {kpi.badge && <Badge variant={kpi.badge as any}>{kpi.badge === 'success' ? 'Active' : kpi.badge === 'error' ? 'Inactive' : 'Paused'}</Badge>}
               </div>
               {kpi.subtext && <p className="text-xs text-gray-400 mt-0.5">{kpi.subtext}</p>}
             </Card>
