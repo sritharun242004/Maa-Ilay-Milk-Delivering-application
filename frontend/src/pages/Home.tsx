@@ -16,7 +16,7 @@ import {
   Twitter,
 } from 'lucide-react';
 
-import heroBg from '../assets/hero-background-new.png';
+import heroBg from '../assets/Hero Background.png';
 import product1l from '../assets/product-1l.jpg';
 import product500ml from '../assets/product-500ml.jpg';
 import commitmentImg from '../assets/commitment.jpg';
