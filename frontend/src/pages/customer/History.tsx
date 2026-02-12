@@ -74,8 +74,8 @@ export const History: React.FC = () => {
     <CustomerLayout>
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">History</h1>
-          <p className="text-gray-600">View your delivery and bottle records</p>
+          <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-2">History</h1>
+          <p className="text-gray-600 text-sm sm:text-base">View your delivery and bottle records</p>
         </div>
 
         <Card className="p-2 mb-8">
@@ -100,7 +100,7 @@ export const History: React.FC = () => {
         </Card>
 
         {activeTab === 'delivery' && (
-          <Card className="p-6">
+          <Card className="p-3 sm:p-6">
             {loadingDelivery ? (
               <p className="text-gray-500 py-8 text-center">Loading delivery history...</p>
             ) : error ? (
@@ -108,25 +108,25 @@ export const History: React.FC = () => {
             ) : deliveryHistory.length === 0 ? (
               <p className="text-gray-500 py-8 text-center">No delivery records yet</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="overflow-x-auto -mx-3 sm:mx-0">
+                <table className="w-full min-w-0">
                   <thead>
                     <tr className="bg-gray-50">
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Date</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Day</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Quantity</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Status</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Delivery Person</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Remarks</th>
+                      <th className="text-left py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-600 uppercase">Date</th>
+                      <th className="text-left py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-600 uppercase">Day</th>
+                      <th className="text-left py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-600 uppercase">Quantity</th>
+                      <th className="text-left py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-600 uppercase">Status</th>
+                      <th className="text-left py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-600 uppercase hidden md:table-cell">Delivery Person</th>
+                      <th className="text-left py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-600 uppercase hidden lg:table-cell">Remarks</th>
                     </tr>
                   </thead>
                   <tbody>
                     {deliveryHistory.map((delivery) => (
                       <tr key={delivery.id} className="border-b border-gray-200">
-                        <td className="py-4 px-4">{formatDateLocal(delivery.date, 'short')}</td>
-                        <td className="py-4 px-4">{delivery.day}</td>
-                        <td className="py-4 px-4 font-semibold">{delivery.quantity}</td>
-                        <td className="py-4 px-4">
+                        <td className="py-3 sm:py-4 px-3 sm:px-4 text-xs sm:text-sm whitespace-nowrap">{formatDateLocal(delivery.date, 'short')}</td>
+                        <td className="py-3 sm:py-4 px-3 sm:px-4 text-xs sm:text-sm">{delivery.day}</td>
+                        <td className="py-3 sm:py-4 px-3 sm:px-4 font-semibold text-xs sm:text-sm">{delivery.quantity}</td>
+                        <td className="py-3 sm:py-4 px-3 sm:px-4">
                           {delivery.status === 'delivered' ? (
                             <Badge variant="success">Delivered</Badge>
                           ) : delivery.status === 'paused' ? (
@@ -137,8 +137,8 @@ export const History: React.FC = () => {
                             <Badge variant="error">Not Delivered</Badge>
                           )}
                         </td>
-                        <td className="py-4 px-4">{delivery.person}</td>
-                        <td className="py-4 px-4 text-gray-600">{delivery.remarks || '-'}</td>
+                        <td className="py-3 sm:py-4 px-3 sm:px-4 text-sm hidden md:table-cell">{delivery.person}</td>
+                        <td className="py-3 sm:py-4 px-3 sm:px-4 text-gray-600 text-sm hidden lg:table-cell">{delivery.remarks || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -158,18 +158,18 @@ export const History: React.FC = () => {
               <p className="text-gray-500 py-8 text-center">No bottle data</p>
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-6 mb-8">
-                  <Card className="p-6 p-0 bg-white">
-                    <p className="text-sm opacity-90 mb-2">Total Issued</p>
-                    <p className="text-4xl font-bold">{bottleData.totalIssued}</p>
+                <div className="grid grid-cols-3 gap-3 sm:gap-6 mb-8">
+                  <Card className="p-3 sm:p-6 bg-white">
+                    <p className="text-xs sm:text-sm opacity-90 mb-1 sm:mb-2">Total Issued</p>
+                    <p className="text-2xl sm:text-4xl font-bold">{bottleData.totalIssued}</p>
                   </Card>
-                  <Card className="p-6 p-0 bg-white">
-                    <p className="text-sm opacity-90 mb-2">Total Collected</p>
-                    <p className="text-4xl font-bold">{bottleData.totalCollected}</p>
+                  <Card className="p-3 sm:p-6 bg-white">
+                    <p className="text-xs sm:text-sm opacity-90 mb-1 sm:mb-2">Total Collected</p>
+                    <p className="text-2xl sm:text-4xl font-bold">{bottleData.totalCollected}</p>
                   </Card>
-                  <Card className="p-6 p-0 bg-white">
-                    <p className="text-sm opacity-90 mb-2">With Customer</p>
-                    <p className="text-4xl font-bold">{bottleData.withCustomer}</p>
+                  <Card className="p-3 sm:p-6 bg-white">
+                    <p className="text-xs sm:text-sm opacity-90 mb-1 sm:mb-2">With Customer</p>
+                    <p className="text-2xl sm:text-4xl font-bold">{bottleData.withCustomer}</p>
                   </Card>
                 </div>
 

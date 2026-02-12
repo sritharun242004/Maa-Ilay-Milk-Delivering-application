@@ -138,14 +138,49 @@ passport.use(
 // ============================================================================
 // SESSION SERIALIZATION
 // ============================================================================
+
+// In-memory cache for deserialized users to avoid DB hit on every request
+// Key: "role:id", Value: { user, expiresAt }
+const userCache = new Map<string, { user: any; expiresAt: number }>();
+const USER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCachedUser(key: string) {
+  const cached = userCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.user;
+  }
+  if (cached) userCache.delete(key);
+  return null;
+}
+
+function setCachedUser(key: string, user: any) {
+  userCache.set(key, { user, expiresAt: Date.now() + USER_CACHE_TTL });
+  // Prevent unbounded growth — evict oldest entries if cache exceeds 500
+  if (userCache.size > 500) {
+    const firstKey = userCache.keys().next().value;
+    if (firstKey) userCache.delete(firstKey);
+  }
+}
+
+/** Call this on logout to clear cached user */
+export function invalidateUserCache(userId: string, role: string) {
+  userCache.delete(`${role}:${userId}`);
+}
+
 passport.serializeUser((user, done) => {
   done(null, { id: user.id, role: user.role });
 });
 
 passport.deserializeUser(async (sessionData: { id: string; role: string }, done) => {
   try {
+    const cacheKey = `${sessionData.role}:${sessionData.id}`;
+    const cached = getCachedUser(cacheKey);
+    if (cached) {
+      return done(null, cached);
+    }
+
     let user;
-    
+
     if (sessionData.role === 'customer') {
       const customer = await prisma.customer.findUnique({
         where: { id: sessionData.id },
@@ -182,6 +217,10 @@ passport.deserializeUser(async (sessionData: { id: string; role: string }, done)
           role: 'delivery' as const,
         };
       }
+    }
+
+    if (user) {
+      setCachedUser(cacheKey, user);
     }
 
     done(null, user || null);

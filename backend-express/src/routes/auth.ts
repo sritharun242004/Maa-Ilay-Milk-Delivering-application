@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import passport from '../config/passport';
+import passport, { invalidateUserCache } from '../config/passport';
 import prisma from '../config/prisma';
 
 const router = Router();
@@ -74,6 +74,10 @@ router.post('/delivery/login',
 // ============================================================================
 
 router.post('/logout', (req, res) => {
+  // Invalidate user cache before destroying session
+  if (req.user) {
+    invalidateUserCache(req.user.id, req.user.role);
+  }
   req.logout((err) => {
     if (err) {
       return res.status(500).json({ error: 'Logout failed' });

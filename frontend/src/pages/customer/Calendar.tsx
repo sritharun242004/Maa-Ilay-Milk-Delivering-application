@@ -375,7 +375,7 @@ export const CustomerCalendar: React.FC = () => {
       <div className="max-w-4xl mx-auto pb-48">
         <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-black text-gray-900 mb-2 tracking-tight">Delivery Calendar</h1>
+            <h1 className="text-2xl sm:text-4xl font-black text-gray-900 mb-2 tracking-tight">Delivery Calendar</h1>
             <p className="text-gray-500 font-medium tracking-tight">Manage pauses and extra milk requests visually.</p>
           </div>
           <div className="flex items-center gap-2 bg-green-50 border border-green-100 px-4 py-2 rounded-lg">
@@ -408,7 +408,7 @@ export const CustomerCalendar: React.FC = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6 mb-10">
           <Card className="p-6 bg-amber-50/50 backdrop-blur-sm border-2 border-amber-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center">
@@ -442,7 +442,7 @@ export const CustomerCalendar: React.FC = () => {
           </div>
         </div>
 
-        <Card className="p-10 border-2 border-gray-100 shadow-xl shadow-gray-200/50 relative overflow-hidden bg-white">
+        <Card className="p-4 sm:p-10 border-2 border-gray-100 shadow-xl shadow-gray-200/50 relative overflow-hidden bg-white">
           {(refreshing || saving) && (
             <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] z-20 flex items-center justify-center">
               <div className="bg-white shadow-sm px-6 py-4 rounded-lg flex items-center gap-4 border-2 border-green-100 animate-in zoom-in duration-300">
@@ -454,8 +454,8 @@ export const CustomerCalendar: React.FC = () => {
 
           <div className="absolute top-0 left-0 w-full h-1 bg-green-800 opacity-30" />
 
-          <div className="flex items-center justify-between mb-10">
-            <h2 className="text-3xl font-black text-gray-900 tracking-tight">{monthLabel}</h2>
+          <div className="flex items-center justify-between mb-6 sm:mb-10">
+            <h2 className="text-xl sm:text-3xl font-black text-gray-900 tracking-tight">{monthLabel}</h2>
             <div className="flex gap-4">
               <button
                 type="button"
@@ -474,11 +474,11 @@ export const CustomerCalendar: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-3 mb-4 text-center text-xs font-black text-gray-400 uppercase tracking-widest opacity-80">
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-3 mb-4 text-center text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest opacity-80">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => <div key={d} className="pb-4">{d}</div>)}
           </div>
 
-          <div className="grid grid-cols-7 gap-3">
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-3">
             {Array.from({ length: firstDayOfMonth }).map((_, i) => <div key={`e-${i}`} />)}
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const day = i + 1;

@@ -7,7 +7,7 @@ import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { CheckCircle, XCircle, ArrowRight, Minus, Plus, AlertCircle } from 'lucide-react';
 import { deliveryKeys } from '../../hooks/useDeliveryData';
-import { fetchWithCsrf, clearCsrfToken } from '../../utils/csrf';
+import { fetchWithCsrf } from '../../utils/csrf';
 
 interface CustomerData {
   id: string;
@@ -77,10 +77,10 @@ export const CustomerAction: React.FC = () => {
       if (!res.ok) throw new Error('Customer not found');
       return res.json() as Promise<ActionPageData>;
     },
-    staleTime: 0, // Always fetch fresh data
-    gcTime: 0, // Don't cache
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    staleTime: 2 * 60 * 1000, // Fresh for 2 min — avoids refetch if re-entering same customer
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    refetchOnMount: true, // Refetch on mount only if stale
+    refetchOnWindowFocus: false, // Don't refetch on app switch
     enabled: !!customerId,
   });
 
@@ -106,80 +106,88 @@ export const CustomerAction: React.FC = () => {
     }
 
     setSubmitting(true);
+    const notes = deliveryStatus === 'NOT_DELIVERED' ? `${reason}. ${remarks}`.trim() : remarks;
+    const deliveryId = data.delivery.id;
+    const payload = {
+      status: deliveryStatus,
+      deliveryNotes: notes || undefined,
+      largeBottlesCollected: deliveryStatus === 'DELIVERED' ? largeCollected : undefined,
+      smallBottlesCollected: deliveryStatus === 'DELIVERED' ? smallCollected : undefined,
+    };
+
+    // --- OPTIMISTIC UPDATE: Update the today's list cache IMMEDIATELY ---
+    const todayQueryKey = deliveryKeys.todayDeliveries(selectedDate);
+    const previousData = queryClient.getQueryData(todayQueryKey);
+
+    if (previousData) {
+      queryClient.setQueryData(todayQueryKey, (old: any) => {
+        if (!old?.deliveries) return old;
+        const updatedDeliveries = old.deliveries.map((d: any) => {
+          if (d.id === deliveryId) {
+            return {
+              ...d,
+              status: deliveryStatus,
+              deliveryNotes: notes || d.deliveryNotes,
+              largeBottlesCollected: deliveryStatus === 'DELIVERED' ? largeCollected : d.largeBottlesCollected,
+              smallBottlesCollected: deliveryStatus === 'DELIVERED' ? smallCollected : d.smallBottlesCollected,
+            };
+          }
+          return d;
+        });
+        const completed = updatedDeliveries.filter((d: any) => d.status === 'DELIVERED').length;
+        return {
+          ...old,
+          deliveries: updatedDeliveries,
+          completed,
+          pending: updatedDeliveries.length - completed,
+        };
+      });
+    }
+
+    // Also invalidate customer detail cache for this customer
+    queryClient.removeQueries({ queryKey: ['delivery-action', customerId] });
+
+    // Navigate back IMMEDIATELY — don't wait for server
+    navigate('/delivery/today', {
+      replace: true,
+      state: { date: selectedDate }
+    });
+
+    // --- BACKGROUND SYNC: Send to server in background ---
     try {
-      const notes = deliveryStatus === 'NOT_DELIVERED' ? `${reason}. ${remarks}`.trim() : remarks;
-      const res = await fetchWithCsrf(`/api/delivery/${data.delivery.id}/mark`, {
+      const res = await fetchWithCsrf(`/api/delivery/${deliveryId}/mark`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: deliveryStatus,
-          deliveryNotes: notes || undefined,
-          largeBottlesCollected: deliveryStatus === 'DELIVERED' ? largeCollected : undefined,
-          smallBottlesCollected: deliveryStatus === 'DELIVERED' ? smallCollected : undefined,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
 
-      // Handle CSRF errors by clearing cache and retrying once
-      let finalRes = res;
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-
-        if (res.status === 403 && err.error?.includes('CSRF')) {
-          clearCsrfToken();
-          // Retry with fresh token
-          finalRes = await fetchWithCsrf(`/api/delivery/${data.delivery.id}/mark`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              status: deliveryStatus,
-              deliveryNotes: notes || undefined,
-              largeBottlesCollected: deliveryStatus === 'DELIVERED' ? largeCollected : undefined,
-              smallBottlesCollected: deliveryStatus === 'DELIVERED' ? smallCollected : undefined,
-            }),
-          });
-
-          if (!finalRes.ok) {
-            const retryErr = await finalRes.json().catch(() => ({}));
-            alert(retryErr.message || retryErr.error || 'Failed to update delivery');
-            return;
-          }
-        } else {
-          alert(err.message || err.error || 'Failed to update delivery');
-          return;
+        // Rollback optimistic update on failure
+        if (previousData) {
+          queryClient.setQueryData(todayQueryKey, previousData);
         }
+        alert(err.message || err.error || 'Failed to update delivery. List has been refreshed.');
+        // Force a fresh fetch to get accurate state
+        queryClient.invalidateQueries({ queryKey: todayQueryKey });
+        return;
       }
 
-      // Check for warning in response (e.g., customer set to inactive)
-      const result = await finalRes.json().catch(() => ({}));
+      const result = await res.json().catch(() => ({}));
       if (result.warning) {
         alert(result.warning);
       }
 
-      // Clear ALL caches to force fresh data
-      queryClient.removeQueries({ queryKey: ['deliveries'] });
-      queryClient.removeQueries({ queryKey: ['delivery'] });
-      queryClient.removeQueries({ queryKey: ['delivery-action'] });
-
-      // Navigate back to today's page WITH the date
-      navigate('/delivery/today', {
-        replace: true,
-        state: { date: selectedDate, forceRefresh: Date.now() }
-      });
-
-      // Force refetch after navigation completes for the specific date
-      setTimeout(() => {
-        queryClient.refetchQueries({
-          queryKey: deliveryKeys.todayDeliveries(selectedDate),
-          type: 'active'
-        });
-      }, 150);
+      // Silently refetch in background to get accurate server state (wallet changes, etc.)
+      queryClient.invalidateQueries({ queryKey: todayQueryKey });
     } catch (error) {
       console.error('Failed to update delivery:', error);
-      alert('Failed to update delivery');
+      // Rollback optimistic update
+      if (previousData) {
+        queryClient.setQueryData(todayQueryKey, previousData);
+      }
+      alert('Failed to update delivery. Please check your connection.');
+      queryClient.invalidateQueries({ queryKey: todayQueryKey });
     } finally {
       setSubmitting(false);
     }

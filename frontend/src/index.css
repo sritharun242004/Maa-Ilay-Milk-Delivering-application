@@ -118,3 +118,20 @@
   scroll-behavior: smooth;
 }
 
+/* Remove 100-300ms tap delay on mobile browsers for interactive elements */
+button,
+a,
+[role="button"],
+input,
+select,
+textarea,
+.cursor-pointer {
+  touch-action: manipulation;
+}
+
+/* Instant visual feedback on touch for delivery cards */
+.delivery-card-touch:active {
+  transform: scale(0.98);
+  transition: transform 0.05s ease-out;
+}
+

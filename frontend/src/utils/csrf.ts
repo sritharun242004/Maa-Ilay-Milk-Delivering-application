@@ -6,6 +6,7 @@
 import { getApiUrl } from '../config/api';
 
 let cachedToken: string | null = null;
+let fetchPromise: Promise<string> | null = null;
 
 /**
  * Fetches a CSRF token from the server
@@ -16,22 +17,43 @@ export async function fetchCsrfToken(): Promise<string> {
     return cachedToken;
   }
 
-  try {
-    const response = await fetch(getApiUrl('/api/csrf-token'), {
-      method: 'GET',
-      credentials: 'include',
-    });
+  // Deduplicate concurrent calls — reuse in-flight request
+  if (fetchPromise) {
+    return fetchPromise;
+  }
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch CSRF token');
+  fetchPromise = (async () => {
+    try {
+      const response = await fetch(getApiUrl('/api/csrf-token'), {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch CSRF token');
+      }
+
+      const data = await response.json();
+      cachedToken = data.csrfToken;
+      return cachedToken!;
+    } catch (error) {
+      console.error('Error fetching CSRF token:', error);
+      throw error;
+    } finally {
+      fetchPromise = null;
     }
+  })();
 
-    const data = await response.json();
-    cachedToken = data.csrfToken;
-    return cachedToken!;
-  } catch (error) {
-    console.error('Error fetching CSRF token:', error);
-    throw error;
+  return fetchPromise;
+}
+
+/**
+ * Preloads the CSRF token in the background.
+ * Call this after login to avoid latency on first mutation.
+ */
+export function preloadCsrfToken(): void {
+  if (!cachedToken) {
+    fetchCsrfToken().catch(() => {});
   }
 }
 

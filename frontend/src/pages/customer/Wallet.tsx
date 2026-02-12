@@ -170,15 +170,15 @@ export const Wallet: React.FC = () => {
   return (
     <CustomerLayout>
       <div className="max-w-4xl mx-auto">
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Wallet</h1>
-            <p className="text-gray-600">Manage your balance and view transactions</p>
+            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-2">Wallet</h1>
+            <p className="text-gray-600 text-sm sm:text-base">Manage your balance and view transactions</p>
           </div>
           <Button
             onClick={() => setShowAddMoney(true)}
             icon={Plus}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 w-full sm:w-auto justify-center"
           >
             Add Money
           </Button>
@@ -195,14 +195,14 @@ export const Wallet: React.FC = () => {
         )}
 
         {/* Wallet Balance Card */}
-        <div className="relative bg-gray-900 text-white rounded-lg p-8 shadow-sm mb-8 overflow-hidden">
+        <div className="relative bg-gray-900 text-white rounded-lg p-5 sm:p-8 shadow-sm mb-8 overflow-hidden">
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2"></div>
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2">
               <WalletIcon className="w-6 h-6 text-gray-300" />
               <p className="text-gray-300">Available Balance</p>
             </div>
-            <p className="text-6xl font-bold mb-4">₹{Number(data.balanceRs).toLocaleString('en-IN')}</p>
+            <p className="text-4xl sm:text-6xl font-bold mb-4">₹{Number(data.balanceRs).toLocaleString('en-IN')}</p>
             <p className="text-gray-300 text-sm">
               {data.lastTransactionAt
                 ? `Last transaction: ${formatDateLocal(data.lastTransactionAt, 'short')}`
@@ -227,8 +227,8 @@ export const Wallet: React.FC = () => {
         </Card>
 
         {/* Transaction History */}
-        <Card className="p-8">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-6">Transaction History</h2>
+        <Card className="p-4 sm:p-8">
+          <h2 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-6">Transaction History</h2>
 
           {data.transactions.length === 0 ? (
             <div className="text-center py-12">
@@ -237,31 +237,31 @@ export const Wallet: React.FC = () => {
               <p className="text-sm text-gray-400 mt-2">Add money to get started</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <table className="w-full min-w-0">
                 <thead>
                   <tr className="bg-gray-50">
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Date</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Description</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Type</th>
-                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Amount</th>
-                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-600 uppercase">Balance</th>
+                    <th className="text-left py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-600 uppercase">Date</th>
+                    <th className="text-left py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-600 uppercase">Description</th>
+                    <th className="text-left py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-600 uppercase">Type</th>
+                    <th className="text-right py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-600 uppercase">Amount</th>
+                    <th className="text-right py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-600 uppercase hidden sm:table-cell">Balance</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.transactions.map((txn) => (
                     <tr key={txn.id} className="border-b border-gray-200 hover:bg-gray-50">
-                      <td className="py-4 px-4 text-sm">{formatDateLocal(txn.createdAt, 'short')}</td>
-                      <td className="py-4 px-4 text-sm">{txn.description}</td>
-                      <td className="py-4 px-4">
-                        <span className={`text-sm font-medium ${isCredit(txn.type) ? 'text-green-600' : 'text-red-600'}`}>
+                      <td className="py-3 sm:py-4 px-3 sm:px-4 text-xs sm:text-sm whitespace-nowrap">{formatDateLocal(txn.createdAt, 'short')}</td>
+                      <td className="py-3 sm:py-4 px-3 sm:px-4 text-xs sm:text-sm max-w-[120px] sm:max-w-none truncate">{txn.description}</td>
+                      <td className="py-3 sm:py-4 px-3 sm:px-4">
+                        <span className={`text-xs sm:text-sm font-medium ${isCredit(txn.type) ? 'text-green-600' : 'text-red-600'}`}>
                           {txn.type === 'WALLET_TOPUP' ? 'Credit' : txn.type.replace(/_/g, ' ')}
                         </span>
                       </td>
-                      <td className={`py-4 px-4 text-right font-semibold ${isCredit(txn.type) ? 'text-green-600' : 'text-red-600'}`}>
+                      <td className={`py-3 sm:py-4 px-3 sm:px-4 text-right font-semibold text-xs sm:text-sm whitespace-nowrap ${isCredit(txn.type) ? 'text-green-600' : 'text-red-600'}`}>
                         {txn.amountPaise >= 0 ? '+' : ''}₹{txn.amountRs}
                       </td>
-                      <td className="py-4 px-4 text-right font-semibold">₹{txn.balanceAfterRs}</td>
+                      <td className="py-3 sm:py-4 px-3 sm:px-4 text-right font-semibold text-sm hidden sm:table-cell">₹{txn.balanceAfterRs}</td>
                     </tr>
                   ))}
                 </tbody>

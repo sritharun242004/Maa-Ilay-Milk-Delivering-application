@@ -130,7 +130,7 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
         </div>
       )}
 
-      <main className="flex-1 lg:ml-60 p-6 pt-20 lg:pt-6">{children}</main>
+      <main className="flex-1 lg:ml-60 p-4 sm:p-6 pt-16 sm:pt-20 lg:pt-6 overflow-x-hidden">{children}</main>
     </div>
   );
 };

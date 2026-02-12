@@ -8,9 +8,11 @@ export const AdminLogin: React.FC = () => {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
 
     try {
       const response = await fetch(getApiUrl('/api/auth/admin/login'), {
@@ -34,6 +36,8 @@ export const AdminLogin: React.FC = () => {
     } catch (error) {
       console.error('Login failed:', error);
       alert('Login failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -76,9 +80,10 @@ export const AdminLogin: React.FC = () => {
 
           <button
             type="submit"
-            className="w-full py-2.5 bg-green-800 text-white rounded-lg text-sm font-medium hover:bg-green-900 transition-colors duration-200"
+            disabled={loading}
+            className="w-full py-2.5 bg-green-800 text-white rounded-lg text-sm font-medium hover:bg-green-900 transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Login to Admin Portal
+            {loading ? 'Logging in...' : 'Login to Admin Portal'}
           </button>
         </form>
       </div>

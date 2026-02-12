@@ -8,9 +8,11 @@ export const DeliveryLogin: React.FC = () => {
   const { login } = useAuth();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
 
     try {
       const response = await fetch(getApiUrl('/api/auth/delivery/login'), {
@@ -34,6 +36,8 @@ export const DeliveryLogin: React.FC = () => {
     } catch (error) {
       console.error('Login failed:', error);
       alert('Login failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -76,9 +80,10 @@ export const DeliveryLogin: React.FC = () => {
 
           <button
             type="submit"
-            className="w-full py-2.5 bg-green-800 text-white rounded-lg text-sm font-medium hover:bg-green-900 transition-colors duration-200"
+            disabled={loading}
+            className="w-full py-2.5 bg-green-800 text-white rounded-lg text-sm font-medium hover:bg-green-900 transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Login to Delivery Portal
+            {loading ? 'Logging in...' : 'Login to Delivery Portal'}
           </button>
         </form>
       </div>

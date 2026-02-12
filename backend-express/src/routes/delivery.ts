@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { isAuthenticated, isDelivery } from '../middleware/auth';
 import prisma from '../config/prisma';
-import { calculateDailyPricePaise } from '../config/pricing';
+import { calculateDailyPricePaise, shouldChargeDeposit, calculateBottleDepositPaise } from '../config/pricing';
 import { MemoryCache } from '../lib/cache';
 
 const assigneesCache = new MemoryCache();
@@ -240,17 +240,14 @@ router.get('/assignees', isAuthenticated, isDelivery, async (req, res) => {
     const list = customers.map((c) => {
       // Compute display status for delivery person view
       let displayStatus: string;
-      if (pausedCustomerIds.has(c.id)) {
+      if (pausedCustomerIds.has(c.id) || c.status === 'PAUSED') {
         displayStatus = 'Paused';
       } else if (c.status === 'PENDING_APPROVAL') {
         displayStatus = 'Pending';
-      } else if (c.Wallet && c.Subscription) {
-        // Negative balance = inactive
-        if (c.Wallet.balancePaise < 0) {
-          displayStatus = 'Inactive';
-        } else {
-          displayStatus = 'Active';
-        }
+      } else if (c.status === 'INACTIVE' || (c.Wallet && c.Wallet.balancePaise < 0)) {
+        displayStatus = 'Inactive';
+      } else if (c.Wallet && c.Subscription && c.status === 'ACTIVE') {
+        displayStatus = 'Active';
       } else if (!c.Subscription) {
         displayStatus = 'Pending';
       } else {
@@ -329,6 +326,8 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
             addressLine1: true,
             addressLine2: true,
             landmark: true,
+            deliveryNotes: true,
+            status: true,
             deliveryStartDate: true, // Include for filtering
             Wallet: { select: { balancePaise: true } },
             Subscription: true,
@@ -423,9 +422,22 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
     const total500mlBottles = sortedDeliveries.reduce((s: any, d: any) => s + d.smallBottles, 0);
 
     // FIX: Transform Customer to customer for frontend compatibility
+    // Include full customer detail so frontend can seed customer action cache (avoids extra API call)
     const normalizedDeliveries = sortedDeliveries.map((d: any) => ({
       ...d,
-      customer: d.Customer,
+      customer: {
+        id: d.Customer.id,
+        name: d.Customer.name,
+        phone: d.Customer.phone,
+        addressLine1: d.Customer.addressLine1,
+        addressLine2: d.Customer.addressLine2,
+        landmark: d.Customer.landmark,
+        deliveryNotes: d.Customer.deliveryNotes,
+        status: d.Customer.status,
+        subscription: d.Customer.Subscription
+          ? { dailyQuantityMl: d.Customer.Subscription.dailyQuantityMl, status: d.Customer.Subscription.status }
+          : null,
+      },
       Customer: undefined,
     }));
 
@@ -712,7 +724,6 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
           const newDeliveryCount = subscription.deliveryCount + 1;
 
           // Check if deposit should be charged
-          const { shouldChargeDeposit, calculateBottleDepositPaise } = await import('../config/pricing');
           if (shouldChargeDeposit(newDeliveryCount, subscription.lastDepositAtDelivery)) {
             const depositAmount = calculateBottleDepositPaise(subscription.dailyQuantityMl);
 
@@ -931,7 +942,7 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
       // Note: Bottle penalty checks moved to separate admin/cron job for performance
     }, {
       timeout: 10000, // 10 seconds - enough for bottle ledger operations
-      isolationLevel: 'Serializable' // Highest isolation for financial operations
+      isolationLevel: 'ReadCommitted' // Safe for delivery — each customer has one assigned delivery person (no concurrent writes)
     });
 
     // Recalculate customer status after wallet changes (may transition to INACTIVE)

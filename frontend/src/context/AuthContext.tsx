@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { clearAllCaches } from '../hooks/useCachedData';
 import { getApiUrl } from '../config/api';
+import { preloadCsrfToken } from '../utils/csrf';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -23,6 +24,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsAuthenticated(true);
     setUserType(type);
     setUserId(id ?? null);
+    // Preload CSRF token so first mutation doesn't have extra round-trip
+    preloadCsrfToken();
   };
 
   const logout = () => {

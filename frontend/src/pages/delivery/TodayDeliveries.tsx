@@ -330,9 +330,10 @@ const DeliveryCard: React.FC<DeliveryCardProps> = ({
 
   return (
     <div
-      className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${isCompleted ? 'opacity-75' : ''}`}
+      className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors delivery-card-touch ${isCompleted ? 'opacity-75' : ''}`}
       onClick={() => onView(customer.id)}
       onMouseEnter={() => onPrefetch(customer.id, selectedDate)}
+      onTouchStart={() => onPrefetch(customer.id, selectedDate)}
     >
       <div className="flex items-start justify-between gap-4">
         {/* Left: Customer Info */}
