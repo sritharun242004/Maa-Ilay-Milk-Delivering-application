@@ -129,7 +129,22 @@ export function sanitizeAddress(address: string | null | undefined): string {
 }
 
 /**
- * Sanitize pincode (Indian postal codes)
+ * Serviceable pincodes in Pondicherry
+ */
+export const SERVICEABLE_PINCODES = [
+  '605010', // Reddiyarpalayam
+  '605006', // Jipmer
+  '605008', // Lawspet
+  '605101', // Auroville
+  '605013', // Saram
+  '605011', // Rainbow Nagar
+  '605001', // White Town
+  '605003', // Muthiyapet
+  '605007', // Ariyankuppam
+];
+
+/**
+ * Sanitize pincode (Indian postal codes) — must be a serviceable area
  */
 export function sanitizePincode(pincode: string | null | undefined): string {
   if (!pincode) return '';
@@ -138,6 +153,10 @@ export function sanitizePincode(pincode: string | null | undefined): string {
 
   if (cleaned.length !== 6) {
     throw new Error('Pincode must be 6 digits');
+  }
+
+  if (!SERVICEABLE_PINCODES.includes(cleaned)) {
+    throw new Error('Sorry, we currently deliver only in select Pondicherry areas. Please choose a serviceable pincode.');
   }
 
   return cleaned;

@@ -1,10 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { MapPin, Phone, Home, User, CheckCircle, AlertCircle } from 'lucide-react';
+import { MapPin, Phone, Home, User, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
 import { fetchWithCsrf, clearCsrfToken } from '../../utils/csrf';
 import { getApiUrl } from '../../config/api';
 import { AddressAutocomplete } from '../../components/AddressAutocomplete';
+
+const SERVICEABLE_AREAS = [
+  { area: 'Reddiyarpalayam', pincode: '605010' },
+  { area: 'Jipmer', pincode: '605006' },
+  { area: 'Lawspet', pincode: '605008' },
+  { area: 'Auroville', pincode: '605101' },
+  { area: 'Saram', pincode: '605013' },
+  { area: 'Rainbow Nagar', pincode: '605011' },
+  { area: 'White Town', pincode: '605001' },
+  { area: 'Muthiyapet', pincode: '605003' },
+  { area: 'Ariyankuppam', pincode: '605007' },
+] as const;
 
 export const CustomerOnboarding: React.FC = () => {
   const navigate = useNavigate();
@@ -31,7 +43,7 @@ export const CustomerOnboarding: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -171,15 +183,17 @@ export const CustomerOnboarding: React.FC = () => {
                 Search Address
               </label>
               <AddressAutocomplete
-                onPlaceSelected={(place) =>
+                onPlaceSelected={(place) => {
+                  const serviceablePincodes = SERVICEABLE_AREAS.map(a => a.pincode);
+                  const autoPin = place.pincode?.replace(/\D/g, '') || '';
                   setFormData((prev) => ({
                     ...prev,
                     addressLine1: place.addressLine1 || prev.addressLine1,
                     addressLine2: place.addressLine2 || prev.addressLine2,
                     city: place.city || prev.city,
-                    pincode: place.pincode || prev.pincode,
-                  }))
-                }
+                    pincode: serviceablePincodes.includes(autoPin) ? autoPin : prev.pincode,
+                  }));
+                }}
                 className={inputClasses}
               />
               <p className="text-xs text-gray-400">Search to auto-fill your address, or type manually below</p>
@@ -246,18 +260,26 @@ export const CustomerOnboarding: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Pincode <span className="text-red-500">*</span>
+                  Area & Pincode <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  name="pincode"
-                  value={formData.pincode}
-                  onChange={handleChange}
-                  required
-                  pattern="[0-9]{6}"
-                  placeholder="6-digit pincode"
-                  className={inputClasses}
-                />
+                <div className="relative">
+                  <select
+                    name="pincode"
+                    value={formData.pincode}
+                    onChange={handleChange}
+                    required
+                    className={`${inputClasses} appearance-none pr-8`}
+                  >
+                    <option value="">Select your area</option>
+                    {SERVICEABLE_AREAS.map((a) => (
+                      <option key={`${a.area}-${a.pincode}`} value={a.pincode}>
+                        {a.area} - {a.pincode}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+                <p className="text-xs text-gray-400 mt-1">We currently deliver only in these areas</p>
               </div>
             </div>
 
