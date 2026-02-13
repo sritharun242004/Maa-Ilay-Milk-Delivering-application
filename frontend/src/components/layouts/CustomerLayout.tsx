@@ -46,7 +46,7 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
           <img
             src="/Maa Illay Remove Background (1).png"
             alt="Maa Ilay Logo"
-            className="h-10 w-auto object-contain"
+            className="h-14 w-auto object-contain"
           />
         </div>
 
@@ -78,59 +78,61 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
         </button>
       </aside>
 
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-4 py-2.5 flex items-center justify-between">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-5 py-3 flex items-center justify-between">
         <div className="flex items-center">
           <img
             src="/Maa Illay Remove Background (1).png"
             alt="Maa Ilay Logo"
-            className="h-9 w-auto object-contain"
+            className="h-12 w-auto object-contain"
           />
         </div>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 hover:bg-gray-100 rounded-lg"
+          className="p-2.5 hover:bg-gray-100 rounded-lg"
         >
-          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
       </div>
 
       {mobileMenuOpen && (
         <div className="lg:hidden fixed inset-0 z-40 bg-black/40" onClick={() => setMobileMenuOpen(false)}>
           <div
-            className="absolute left-0 top-0 bottom-0 w-60 bg-white px-4 py-5"
+            className="absolute right-0 top-0 bottom-0 w-72 bg-white px-5 py-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <nav className="space-y-0.5 mt-14">
+            <nav className="space-y-1 mt-14">
               {navItems.map((item) => (
                 <NavLink
                   key={item.path}
                   to={item.path}
                   onClick={() => setMobileMenuOpen(false)}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                    `flex items-center gap-3.5 px-4 py-3 rounded-lg text-base font-medium transition-colors duration-200 ${
                       isActive
                         ? 'bg-green-50 text-green-800'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`
                   }
                 >
-                  <item.icon className="w-4 h-4" />
+                  <item.icon className="w-5 h-5" />
                   <span>{item.label}</span>
                 </NavLink>
               ))}
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors duration-200 w-full"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Logout</span>
-              </button>
+              <div className="border-t border-gray-100 mt-2 pt-2">
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-3.5 px-4 py-3 rounded-lg text-base font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors duration-200 w-full"
+                >
+                  <LogOut className="w-5 h-5" />
+                  <span>Logout</span>
+                </button>
+              </div>
             </nav>
           </div>
         </div>
       )}
 
-      <main className="flex-1 lg:ml-60 p-4 sm:p-6 pt-16 sm:pt-20 lg:pt-6 overflow-x-hidden">{children}</main>
+      <main className="flex-1 lg:ml-60 p-4 sm:p-6 pt-20 sm:pt-24 lg:pt-6 overflow-x-hidden">{children}</main>
     </div>
   );
 };

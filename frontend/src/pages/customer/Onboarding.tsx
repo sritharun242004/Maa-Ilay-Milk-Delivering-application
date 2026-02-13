@@ -82,19 +82,18 @@ export const CustomerOnboarding: React.FC = () => {
             return;
           } else {
             const retryData = await retryResponse.json().catch(() => ({}));
-            setError(retryData.error || 'Failed to save profile');
+            setError(retryData.error || retryData.message || 'Failed to save profile');
             return;
           }
         }
 
-        setError(data.error || 'Failed to save profile');
+        setError(data.error || data.message || 'Failed to save profile');
       } else {
         login('customer');
         navigate('/customer/dashboard');
       }
-    } catch (err) {
-      console.error('Failed to save profile:', err);
-      setError('Failed to save profile. Please try again.');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to save profile. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -136,9 +135,12 @@ export const CustomerOnboarding: React.FC = () => {
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-50 border border-red-100 rounded-lg p-4 mb-6 flex items-start gap-3">
-            <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-6 flex items-start gap-3 shadow-sm">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-red-800">Unable to save profile</p>
+              <p className="text-sm text-red-700 mt-0.5">{error}</p>
+            </div>
           </div>
         )}
 

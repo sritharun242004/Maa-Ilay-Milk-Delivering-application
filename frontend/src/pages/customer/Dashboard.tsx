@@ -310,14 +310,21 @@ export const CustomerDashboard: React.FC = () => {
             <Link key={index} to={action.path} className="block">
               <Card
                 hover
-                className="p-5 cursor-pointer group"
+                className="p-4 md:p-5 cursor-pointer group"
               >
-                <div className="w-9 h-9 bg-green-50 rounded-lg flex items-center justify-center mb-3">
-                  <action.icon className="w-4 h-4 text-green-800" />
+                <div className="flex items-center gap-3 md:block">
+                  <div className="w-9 h-9 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0 md:mb-3">
+                    <action.icon className="w-4 h-4 text-green-800" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-900">{action.title}</h3>
+                      <ArrowRight className="w-3.5 h-3.5 text-gray-400 md:hidden" />
+                    </div>
+                    <p className="text-xs text-gray-500">{action.description}</p>
+                  </div>
                 </div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-1">{action.title}</h3>
-                <p className="text-xs text-gray-500 mb-3">{action.description}</p>
-                <div className="flex items-center text-green-800 text-xs font-medium gap-1">
+                <div className="hidden md:flex items-center text-green-800 text-xs font-medium gap-1 mt-3">
                   View
                   <ArrowRight className="w-3 h-3" />
                 </div>

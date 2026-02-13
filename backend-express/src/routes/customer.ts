@@ -109,17 +109,15 @@ router.post('/complete-profile', isAuthenticated, isCustomer, async (req, res) =
 
     // Handle unique constraint violation (phone already exists)
     if (error.code === 'P2002') {
-      return res.status(400).json(createErrorResponse(
-        ErrorCode.CUSTOMER_ALREADY_EXISTS,
-        'Phone number already registered'
-      ));
+      return res.status(400).json({ error: 'This phone number is already registered with another account. Please use a different number.' });
     }
 
-    res.status(500).json(createErrorResponse(
-      ErrorCode.DATABASE_ERROR,
-      'Failed to complete profile',
-      { originalError: error.message }
-    ));
+    // Handle validation/sanitization errors (thrown by sanitize functions)
+    if (error instanceof Error && !error.code) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.status(500).json({ error: 'Failed to complete profile. Please try again.' });
   }
 });
 
