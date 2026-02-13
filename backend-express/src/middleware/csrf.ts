@@ -36,17 +36,6 @@ const csrfConfig = doubleCsrf({
 
     const identifier = sessionId || `temp-${ip}`;
 
-    // Log for debugging
-    console.log('CSRF Session Identifier:', {
-      method: req.method,
-      path: req.path,
-      sessionId,
-      ip,
-      identifier,
-      hasSession: !!req.session,
-      csrfInitialized: (req.session as any)?.csrfInitialized,
-    });
-
     return identifier;
   },
 });
@@ -70,17 +59,6 @@ export const csrfTokenEndpoint = (req: Request, res: Response) => {
         }
       });
     }
-
-    // Log session info for debugging
-    const sessionId = (req.session as any)?.id || req.sessionID;
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
-    console.log('CSRF Token Request:', {
-      sessionId,
-      ip,
-      hasCookie: !!req.cookies?.['maa-ilay.csrf'],
-      hasSession: !!req.session,
-      cookies: Object.keys(req.cookies || {}),
-    });
 
     const csrfToken = csrfConfig.generateCsrfToken(req, res, { overwrite: true });
     res.json({ csrfToken });

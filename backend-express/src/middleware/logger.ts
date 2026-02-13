@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import morgan from 'morgan';
 import fs from 'fs';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { randomBytes } from 'crypto';
 
 /**
  * Request Logging Middleware
@@ -208,9 +208,9 @@ export function requestContextLogger(req: Request, res: Response, next: NextFunc
   // Check if request ID already exists (from load balancer or proxy)
   let requestId = req.get('X-Request-ID') || req.get('X-Correlation-ID');
 
-  // Generate new UUID if no request ID provided
+  // Generate lightweight random ID if no request ID provided
   if (!requestId) {
-    requestId = uuidv4();
+    requestId = randomBytes(8).toString('hex');
   }
 
   // Store request ID on request object for use in other middleware/routes

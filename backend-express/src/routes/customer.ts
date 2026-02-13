@@ -262,6 +262,7 @@ router.get('/dashboard', isAuthenticated, isCustomer, async (req, res) => {
     }
 
     // FIX: Use lowercase 'subscription' for frontend compatibility
+    res.set('Cache-Control', 'private, max-age=15');
     res.json({
       customer: {
         id: customer.id,

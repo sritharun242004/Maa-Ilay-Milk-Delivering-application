@@ -44,11 +44,11 @@ function syntheticDashboard() {
 
 router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
   try {
-    // Check cache first (30s TTL)
+    // Check cache first (60s TTL)
     const cacheKey = 'admin_dashboard';
     const cached = dashboardCache.get(cacheKey);
     if (cached) {
-      res.set('Cache-Control', 'private, max-age=30');
+      res.set('Cache-Control', 'private, max-age=60');
       return res.json(cached);
     }
 
@@ -64,9 +64,10 @@ router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
     const sevenDaysAgoRange = getDateRangeForDateColumn(sevenDaysAgoIST);
     const sevenDaysAgo = sevenDaysAgoRange.start;
 
-    // Ensure today's Delivery rows exist for all delivery persons
+    // Ensure today's Delivery rows exist for all delivery persons (non-blocking)
     const allDeliveryPersons = await prisma.deliveryPerson.findMany({ select: { id: true } });
-    await Promise.all(allDeliveryPersons.map((dp) => ensureTodayDeliveries(dp.id, todayStart, todayEnd)));
+    // Fire in background — don't block dashboard response for row creation
+    Promise.all(allDeliveryPersons.map((dp) => ensureTodayDeliveries(dp.id, todayStart, todayEnd))).catch(() => {});
 
     // Boundaries for Yesterday
     const yesterdayRange = getDateRangeForDateColumn(yesterdayIST);
@@ -115,15 +116,19 @@ router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
 
     // --- REPAIR & SYNC ---
     // Ensure all today's deliveries have the correct price based on current rules
-    const todayDl = await Promise.all(todayDlRaw.map(async (d) => {
+    const incorrectPrices = todayDlRaw.filter(d => d.chargePaise !== calculateDailyPricePaise(d.quantityMl));
+    if (incorrectPrices.length > 0) {
+      // Batch update all incorrect prices in a single transaction (background)
+      prisma.$transaction(
+        incorrectPrices.map(d =>
+          prisma.delivery.update({ where: { id: d.id }, data: { chargePaise: calculateDailyPricePaise(d.quantityMl) } })
+        )
+      ).catch(() => {});
+    }
+    const todayDl = todayDlRaw.map(d => {
       const correctPrice = calculateDailyPricePaise(d.quantityMl);
-      if (d.chargePaise !== correctPrice) {
-        // Sync in background to fix the DB state
-        prisma.delivery.update({ where: { id: d.id }, data: { chargePaise: correctPrice } }).catch(() => { });
-        return { ...d, chargePaise: correctPrice };
-      }
-      return d;
-    }));
+      return d.chargePaise !== correctPrice ? { ...d, chargePaise: correctPrice } : d;
+    });
 
     // KPI Calc: Today
     const deliveredToday = todayDl.filter(d => d.status === 'DELIVERED');
@@ -183,9 +188,9 @@ router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
       recentActivities: activities.length > 0 ? activities : syntheticDashboard().recentActivities,
     };
 
-    // Cache for 30 seconds
-    dashboardCache.set(cacheKey, dashboardData, 30_000);
-    res.set('Cache-Control', 'private, max-age=30');
+    // Cache for 60 seconds
+    dashboardCache.set(cacheKey, dashboardData, 60_000);
+    res.set('Cache-Control', 'private, max-age=60');
     res.json(dashboardData);
   } catch (e) {
     console.error('Admin dashboard error:', e);

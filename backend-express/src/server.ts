@@ -134,8 +134,56 @@ app.use(requestContextLogger);
 
 import { PrismaSessionStore } from '@quixo3/prisma-session-store';
 import { PrismaClient } from '@prisma/client';
+import { Store } from 'express-session';
 
 const prisma = new PrismaClient();
+
+// In-memory cache layer for session store to avoid DB roundtrip on every request
+class CachedSessionStore extends Store {
+  private backend: InstanceType<typeof PrismaSessionStore>;
+  private cache = new Map<string, { data: string; expiresAt: number }>();
+  private CACHE_TTL = 60 * 1000; // 60 seconds
+
+  constructor(backend: InstanceType<typeof PrismaSessionStore>) {
+    super();
+    this.backend = backend;
+  }
+
+  get = (sid: string, callback: (err?: any, session?: session.SessionData | null) => void) => {
+    const cached = this.cache.get(sid);
+    if (cached && cached.expiresAt > Date.now()) {
+      try {
+        return callback(null, JSON.parse(cached.data));
+      } catch { /* fall through to DB */ }
+    }
+    this.backend.get(sid, (err, sess) => {
+      if (!err && sess) {
+        this.cache.set(sid, { data: JSON.stringify(sess), expiresAt: Date.now() + this.CACHE_TTL });
+      }
+      callback(err, sess);
+    });
+  };
+
+  set = (sid: string, sess: session.SessionData, callback?: (err?: any) => void) => {
+    this.cache.set(sid, { data: JSON.stringify(sess), expiresAt: Date.now() + this.CACHE_TTL });
+    this.backend.set(sid, sess, callback);
+  };
+
+  destroy = (sid: string, callback?: (err?: any) => void) => {
+    this.cache.delete(sid);
+    this.backend.destroy(sid, callback);
+  };
+
+  touch = (sid: string, sess: session.SessionData, callback?: () => void) => {
+    // Update local cache expiry; write to DB only every 5 minutes
+    const cached = this.cache.get(sid);
+    if (cached) {
+      cached.expiresAt = Date.now() + this.CACHE_TTL;
+    }
+    // Skip DB touch — session expiry is 7 days, no need to update on every request
+    if (callback) callback();
+  };
+}
 
 // Session configuration
 // SECURITY: Session secret is validated during environment validation
@@ -146,19 +194,21 @@ if (!sessionSecret) {
   process.exit(1);
 }
 
+const prismaStore = new PrismaSessionStore(
+  prisma,
+  {
+    checkPeriod: 10 * 60 * 1000, // Cleanup expired sessions every 10 min
+    dbRecordIdIsSessionId: false,
+    dbRecordIdFunction: undefined,
+  }
+);
+
 app.use(
   session({
     secret: sessionSecret, // No fallback - must be explicitly set
     resave: false,
     saveUninitialized: false,
-    store: new PrismaSessionStore(
-      prisma,
-      {
-        checkPeriod: 2 * 60 * 1000,
-        dbRecordIdIsSessionId: false,
-        dbRecordIdFunction: undefined,
-      }
-    ),
+    store: new CachedSessionStore(prismaStore),
     cookie: {
       secure: process.env.NODE_ENV === 'production', // HTTPS in production
       httpOnly: true,

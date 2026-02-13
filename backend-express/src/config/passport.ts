@@ -28,15 +28,14 @@ passport.use(
         });
 
         if (!customer) {
-          // Create new customer with unique temporary values
-          // Use email as temporary phone to ensure uniqueness until onboarding
-          const tempPhone = email.replace(/[^0-9]/g, '').slice(0, 10).padEnd(10, '0');
-          
+          // Create new customer with unique temporary phone using Google profile ID
+          const tempPhone = `g${profile.id}`.slice(0, 20);
+
           customer = await prisma.customer.create({
             data: {
               email,
               name: profile.displayName || email.split('@')[0],
-              phone: tempPhone, // Temporary unique phone from email
+              phone: tempPhone,
               addressLine1: 'Onboarding Pending', // Will be updated during onboarding
               city: 'Pondicherry',
               pincode: '000000', // Will be updated during onboarding
@@ -142,7 +141,7 @@ passport.use(
 // In-memory cache for deserialized users to avoid DB hit on every request
 // Key: "role:id", Value: { user, expiresAt }
 const userCache = new Map<string, { user: any; expiresAt: number }>();
-const USER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const USER_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 function getCachedUser(key: string) {
   const cached = userCache.get(key);
@@ -155,8 +154,8 @@ function getCachedUser(key: string) {
 
 function setCachedUser(key: string, user: any) {
   userCache.set(key, { user, expiresAt: Date.now() + USER_CACHE_TTL });
-  // Prevent unbounded growth — evict oldest entries if cache exceeds 500
-  if (userCache.size > 500) {
+  // Prevent unbounded growth — evict oldest entries if cache exceeds 2000
+  if (userCache.size > 2000) {
     const firstKey = userCache.keys().next().value;
     if (firstKey) userCache.delete(firstKey);
   }

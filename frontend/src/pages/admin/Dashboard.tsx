@@ -27,8 +27,13 @@ const activityColors: Record<string, string> = {
 
 export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<DashboardData | null>(() => {
+    try {
+      const cached = sessionStorage.getItem('admin_dashboard');
+      return cached ? JSON.parse(cached) : null;
+    } catch { return null; }
+  });
+  const [loading, setLoading] = useState(!data);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,8 +42,11 @@ export const AdminDashboard: React.FC = () => {
         if (!res.ok) throw new Error('Failed to load dashboard');
         return res.json();
       })
-      .then(setData)
-      .catch(() => setError('Could not load dashboard'))
+      .then((d) => {
+        setData(d);
+        try { sessionStorage.setItem('admin_dashboard', JSON.stringify(d)); } catch {}
+      })
+      .catch(() => { if (!data) setError('Could not load dashboard'); })
       .finally(() => setLoading(false));
   }, []);
 

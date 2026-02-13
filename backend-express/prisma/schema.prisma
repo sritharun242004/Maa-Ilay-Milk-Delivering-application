@@ -191,6 +191,7 @@ model Pause {
   @@unique([customerId, pauseDate])
   @@index([customerId])
   @@index([pauseDate])
+  @@index([customerId, pauseDate])
 }
 
 model PaymentOrder {

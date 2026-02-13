@@ -83,7 +83,12 @@ export const DeliveryLogin: React.FC = () => {
             disabled={loading}
             className="w-full py-2.5 bg-green-800 text-white rounded-lg text-sm font-medium hover:bg-green-900 transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {loading ? 'Logging in...' : 'Login to Delivery Portal'}
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Logging in...
+              </span>
+            ) : 'Login to Delivery Portal'}
           </button>
         </form>
       </div>
