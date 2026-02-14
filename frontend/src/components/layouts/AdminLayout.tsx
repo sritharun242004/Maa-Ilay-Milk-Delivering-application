@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
-  Droplet,
+  Droplets,
   LayoutDashboard,
   Users,
   Truck,
@@ -36,6 +36,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { path: '/admin/deliveries', label: 'Deliveries', icon: ClipboardList },
     { path: '/admin/customers', label: 'Customers', icon: Users },
     { path: '/admin/delivery-team', label: 'Delivery Team', icon: Truck },
+    { path: '/admin/products', label: 'Products', icon: Droplets },
     { path: '/admin/inventory', label: 'Inventory', icon: Package },
     { path: '/admin/payments', label: 'Payments', icon: IndianRupee },
     { path: '/admin/penalties', label: 'Penalties', icon: AlertCircle },

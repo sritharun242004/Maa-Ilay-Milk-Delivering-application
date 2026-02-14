@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PRICING } from '../config/pricing';
+import { usePricing } from '../hooks/usePricing';
 import {
   ArrowRight,
   Phone,
@@ -23,6 +23,7 @@ import commitmentImg from '../assets/commitment.jpg';
 
 export const Home: React.FC = () => {
   const navigate = useNavigate();
+  const { daily1LRs, daily500mlRs } = usePricing();
 
   const scrollToProducts = () => {
     document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
@@ -174,14 +175,14 @@ export const Home: React.FC = () => {
               {
                 name: 'Fresh Cow Milk (1L)',
                 benefit: 'Perfect for families. Pure, fresh milk delivered every morning.',
-                price: `₹${PRICING.DAILY_1L_RS}/day`,
+                price: `₹${daily1LRs}/day`,
                 image: product1l,
                 popular: true,
               },
               {
                 name: 'Fresh Cow Milk (500ml)',
                 benefit: 'Ideal for individuals. Fresh, pure milk in a convenient size for daily consumption.',
-                price: `₹${PRICING.DAILY_500ML_RS}/day`,
+                price: `₹${daily500mlRs}/day`,
                 image: product500ml,
                 popular: false,
               },

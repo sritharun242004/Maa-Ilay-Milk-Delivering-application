@@ -1,7 +1,12 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import 'dotenv/config'
-import { calculateDailyPricePaise } from '../src/config/pricing'
+import { DAILY_PRICE_MAP_PAISE } from '../src/config/pricing'
+
+// Sync helper for seed — uses hardcoded fallback map (no DB dependency)
+function calculateDailyPricePaise(quantityMl: number): number {
+  return DAILY_PRICE_MAP_PAISE[quantityMl] ?? 11000;
+}
 
 const prisma = new PrismaClient()
 
@@ -108,6 +113,25 @@ async function main() {
   }
 
   console.log('✓ System config initialized')
+
+  // Seed product pricing tiers
+  const pricingTiers = [
+    { quantityMl: 500,  label: '500ml', dailyPricePaise: 6800,  largeBottleDepositPaise: 3500, smallBottleDepositPaise: 2500 },
+    { quantityMl: 1000, label: '1L',    dailyPricePaise: 11000, largeBottleDepositPaise: 3500, smallBottleDepositPaise: 2500 },
+    { quantityMl: 1500, label: '1.5L',  dailyPricePaise: 16500, largeBottleDepositPaise: 3500, smallBottleDepositPaise: 2500 },
+    { quantityMl: 2000, label: '2L',    dailyPricePaise: 21500, largeBottleDepositPaise: 3500, smallBottleDepositPaise: 2500 },
+    { quantityMl: 2500, label: '2.5L',  dailyPricePaise: 26800, largeBottleDepositPaise: 3500, smallBottleDepositPaise: 2500 },
+  ]
+
+  for (const tier of pricingTiers) {
+    await prisma.productPricing.upsert({
+      where: { quantityMl: tier.quantityMl },
+      update: {},
+      create: { ...tier, isActive: true },
+    })
+  }
+
+  console.log('✓ Product pricing tiers seeded (5 tiers)')
 
   // ----- Mock data for delivery person testing -----
   const today = new Date()

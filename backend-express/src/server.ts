@@ -245,6 +245,19 @@ app.use('/health', healthRoutes);
 // CSRF token endpoint (GET request, no CSRF protection needed)
 app.get('/api/csrf-token', csrfTokenEndpoint);
 
+// Public pricing endpoint (no auth, no CSRF — read-only)
+app.get('/api/pricing', async (_req, res) => {
+  try {
+    const { loadPricing } = await import('./config/pricingLoader');
+    const tiers = await loadPricing();
+    res.set('Cache-Control', 'public, max-age=300'); // 5 minutes
+    res.json({ tiers });
+  } catch (e) {
+    console.error('Pricing endpoint error:', e);
+    res.status(500).json({ error: 'Failed to load pricing' });
+  }
+});
+
 // Auth routes (stricter rate limiting for login/signup)
 app.use('/api/auth', authLimiter, authRoutes);
 

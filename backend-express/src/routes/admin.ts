@@ -3,7 +3,8 @@ import bcrypt from 'bcryptjs';
 import { isAuthenticated, isAdmin } from '../middleware/auth';
 import prisma from '../config/prisma';
 import { passwordResetLimiter } from '../middleware/rateLimiter';
-import { calculateDailyPricePaise } from '../config/pricing';
+import { calculateDailyPricePaise, calculateBottleDepositPaise } from '../config/pricing';
+import { loadPricing } from '../config/pricingLoader';
 import { ensureTodayDeliveries } from './delivery';
 import { sanitizeName, sanitizePhone } from '../utils/sanitize';
 import { PAGINATION, VALIDATION } from '../config/constants';
@@ -115,19 +116,25 @@ router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
     ]);
 
     // --- REPAIR & SYNC ---
-    // Ensure all today's deliveries have the correct price based on current rules
-    const incorrectPrices = todayDlRaw.filter(d => d.chargePaise !== calculateDailyPricePaise(d.quantityMl));
+    // Pre-load pricing map for price verification
+    const pricingTiers = await loadPricing();
+    const priceLookup = new Map(pricingTiers.map(t => [t.quantityMl, t.dailyPricePaise]));
+    const getPrice = (qtyMl: number) => priceLookup.get(qtyMl) ?? 0;
+
+    const incorrectPrices = todayDlRaw.filter(d => {
+      const correct = getPrice(d.quantityMl);
+      return correct > 0 && d.chargePaise !== correct;
+    });
     if (incorrectPrices.length > 0) {
-      // Batch update all incorrect prices in a single transaction (background)
       prisma.$transaction(
         incorrectPrices.map(d =>
-          prisma.delivery.update({ where: { id: d.id }, data: { chargePaise: calculateDailyPricePaise(d.quantityMl) } })
+          prisma.delivery.update({ where: { id: d.id }, data: { chargePaise: getPrice(d.quantityMl) } })
         )
       ).catch(() => {});
     }
     const todayDl = todayDlRaw.map(d => {
-      const correctPrice = calculateDailyPricePaise(d.quantityMl);
-      return d.chargePaise !== correctPrice ? { ...d, chargePaise: correctPrice } : d;
+      const correctPrice = getPrice(d.quantityMl);
+      return correctPrice > 0 && d.chargePaise !== correctPrice ? { ...d, chargePaise: correctPrice } : d;
     });
 
     // KPI Calc: Today
@@ -850,8 +857,7 @@ router.patch('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
 
           // Charge first bottle deposit
           if (existing.Subscription && existing.Wallet) {
-            const { calculateBottleDepositPaise } = await import('../config/pricing');
-            depositAmountPaise = calculateBottleDepositPaise(existing.Subscription.dailyQuantityMl);
+            depositAmountPaise = await calculateBottleDepositPaise(existing.Subscription.dailyQuantityMl);
 
             const currentBalance = existing.Wallet.balancePaise;
             if (currentBalance < depositAmountPaise) {
@@ -985,7 +991,7 @@ router.patch('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
         // Only create if customer has non-negative balance
         if (balance >= 0) {
           const quantityMl = sub.dailyQuantityMl;
-          const chargePaise = calculateDailyPricePaise(quantityMl);
+          const chargePaise = await calculateDailyPricePaise(quantityMl);
 
           await prisma.delivery.create({
             data: {
@@ -1596,6 +1602,96 @@ router.post('/penalties/impose', isAuthenticated, isAdmin, async (req, res) => {
   } catch (e) {
     console.error('Admin impose penalty error:', e);
     res.status(500).json({ error: 'Failed to impose fine' });
+  }
+});
+
+// ============================================================================
+// PRODUCTS & PRICING
+// ============================================================================
+
+// Get all product pricing tiers (admin view)
+router.get('/products', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const tiers = await prisma.productPricing.findMany({
+      orderBy: { quantityMl: 'asc' },
+    });
+    res.json({ tiers });
+  } catch (e) {
+    console.error('Admin products error:', e);
+    res.status(500).json({ error: 'Failed to load products' });
+  }
+});
+
+// Update a product pricing tier
+router.patch('/products/:id', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { dailyPricePaise, largeBottleDepositPaise, smallBottleDepositPaise } = req.body;
+
+    const existing = await prisma.productPricing.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: 'Product tier not found' });
+
+    // Validate inputs — reject clearly invalid values instead of silently skipping
+    if (dailyPricePaise !== undefined) {
+      if (typeof dailyPricePaise !== 'number' || dailyPricePaise <= 0) {
+        return res.status(400).json({ error: 'Daily price must be a positive number' });
+      }
+    }
+    if (largeBottleDepositPaise !== undefined) {
+      if (typeof largeBottleDepositPaise !== 'number' || largeBottleDepositPaise < 0) {
+        return res.status(400).json({ error: 'Large bottle deposit must be >= 0' });
+      }
+    }
+    if (smallBottleDepositPaise !== undefined) {
+      if (typeof smallBottleDepositPaise !== 'number' || smallBottleDepositPaise < 0) {
+        return res.status(400).json({ error: 'Small bottle deposit must be >= 0' });
+      }
+    }
+
+    const data: any = {};
+    if (dailyPricePaise !== undefined) data.dailyPricePaise = Math.round(dailyPricePaise);
+    if (largeBottleDepositPaise !== undefined) data.largeBottleDepositPaise = Math.round(largeBottleDepositPaise);
+    if (smallBottleDepositPaise !== undefined) data.smallBottleDepositPaise = Math.round(smallBottleDepositPaise);
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ error: 'No valid updates provided' });
+    }
+
+    data.updatedByAdminId = req.user?.id ?? null;
+
+    const updated = await prisma.productPricing.update({
+      where: { id },
+      data,
+    });
+
+    // Invalidate pricing cache so new prices take effect immediately
+    const { invalidatePricingCache } = await import('../config/pricingLoader');
+    invalidatePricingCache();
+
+    // Audit log
+    if (req.user) {
+      await prisma.adminAuditLog.create({
+        data: {
+          adminId: req.user.id,
+          action: 'UPDATE_PRICING',
+          entityType: 'ProductPricing',
+          entityId: id,
+          oldValue: {
+            dailyPricePaise: existing.dailyPricePaise,
+            largeBottleDepositPaise: existing.largeBottleDepositPaise,
+            smallBottleDepositPaise: existing.smallBottleDepositPaise,
+          },
+          newValue: data,
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'] ?? null,
+        },
+      });
+    }
+
+    res.json({ success: true, tier: updated });
+  } catch (e) {
+    console.error('Admin update product error:', e);
+    res.status(500).json({ error: 'Failed to update product pricing' });
   }
 });
 

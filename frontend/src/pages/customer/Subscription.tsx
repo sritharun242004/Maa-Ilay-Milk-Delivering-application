@@ -5,11 +5,11 @@ import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { ChevronDown, Check, Info, Droplet } from 'lucide-react';
-import { DAILY_QUANTITY_OPTIONS } from '../../config/pricing';
+import { usePricing } from '../../hooks/usePricing';
 import { fetchWithCsrf, clearCsrfToken } from '../../utils/csrf';
 import { getApiUrl } from '../../config/api';
 
-type QuantityOption = (typeof DAILY_QUANTITY_OPTIONS)[number];
+type QuantityOption = { liters: number; label: string; dailyRs: number };
 
 type DashboardData = {
   subscription: {
@@ -25,6 +25,7 @@ type DashboardData = {
 
 export const Subscription: React.FC = () => {
   const navigate = useNavigate();
+  const { quantityOptions } = usePricing();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedQuantity, setSelectedQuantity] = useState<QuantityOption | null>(null);
@@ -45,7 +46,7 @@ export const Subscription: React.FC = () => {
         setDashboardData(data);
         // Pre-select current subscription quantity if exists
         if (data.subscription) {
-          const currentOption = DAILY_QUANTITY_OPTIONS.find(
+          const currentOption = quantityOptions.find(
             (opt) => opt.liters === data.subscription.dailyQuantityMl / 1000
           );
           if (currentOption) setSelectedQuantity(currentOption);
@@ -248,7 +249,7 @@ export const Subscription: React.FC = () => {
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Start Your Milk Subscription</h3>
                 <p className="text-gray-700 mb-3">
-                  Select your daily milk quantity below. Delivery happens every morning at 6 AM.
+                  Select your daily milk quantity below. Delivery happens every morning between 6-8 AM.
                   Money will be deducted from your wallet for each delivery.
                 </p>
                 <p className="text-sm text-blue-700">
@@ -266,7 +267,7 @@ export const Subscription: React.FC = () => {
           </h2>
           <p className="text-gray-600 mb-6">Choose how much milk you want per day (0.5L to 2.5L)</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-            {DAILY_QUANTITY_OPTIONS.map((opt) => (
+            {quantityOptions.map((opt) => (
               <button
                 key={opt.liters}
                 type="button"
@@ -305,7 +306,7 @@ export const Subscription: React.FC = () => {
               <Button
                 variant="secondary"
                 onClick={() => {
-                  const currentOption = DAILY_QUANTITY_OPTIONS.find(
+                  const currentOption = quantityOptions.find(
                     (opt) => opt.liters === subscription!.dailyQuantityMl / 1000
                   );
                   setSelectedQuantity(currentOption || null);

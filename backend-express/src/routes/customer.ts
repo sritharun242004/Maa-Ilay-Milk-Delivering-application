@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { isAuthenticated, isCustomer } from '../middleware/auth';
 import prisma from '../config/prisma';
-import { PRICING, calculateDailyPricePaise, DAILY_PRICE_MAP_RS, calculateDailyPriceRs } from '../config/pricing';
+import { PRICING, calculateDailyPricePaise, calculateDailyPriceRs, calculateBottleDepositPaise } from '../config/pricing';
 import {
   getNowIST,
   getStartOfDayIST,
@@ -215,7 +215,7 @@ router.get('/dashboard', isAuthenticated, isCustomer, async (req, res) => {
     const dailyQuantityMl = sub?.dailyQuantityMl ?? 1000;
     const { date: nextPaymentDateObj, year, month } = getNextPaymentDate(now);
     const daysInNextMonth = daysInMonth(year, month);
-    const dailyRs = calculateDailyPriceRs(dailyQuantityMl);
+    const dailyRs = await calculateDailyPriceRs(dailyQuantityMl);
     const nextPaymentAmountRs = (daysInNextMonth * dailyRs).toFixed(2);
     const nextPaymentMonthName = formatMonthYear(nextPaymentDateObj);
 
@@ -461,7 +461,7 @@ router.post('/subscribe', walletLimiter, isAuthenticated, isCustomer, async (req
     });
 
     // Calculate daily price using pricing map (includes volume discounts)
-    const dailyPricePaise = calculateDailyPricePaise(dailyQuantityMl);
+    const dailyPricePaise = await calculateDailyPricePaise(dailyQuantityMl);
 
     const customerId = req.user.id;
     const now = new Date();
@@ -475,8 +475,7 @@ router.post('/subscribe', walletLimiter, isAuthenticated, isCustomer, async (req
     }
 
     // Calculate minimum required balance: bottle deposit + 3 days milk
-    const { calculateBottleDepositPaise } = await import('../config/pricing');
-    const depositRequired = calculateBottleDepositPaise(dailyQuantityMl);
+    const depositRequired = await calculateBottleDepositPaise(dailyQuantityMl);
     const minimumBalance = depositRequired + (dailyPricePaise * 3); // Deposit + 3 days milk
 
     // Check if user has sufficient balance
@@ -637,7 +636,7 @@ router.get('/calendar', isAuthenticated, isCustomer, async (req, res) => {
       month,
       currentMonth: `${year}-${String(month + 1).padStart(2, '0')}`,
       pauseCutoffHour: PAUSE_CUTOFF_HOUR,
-      pauseCutoffMessage: 'To modify tomorrow\'s delivery, you must do it before 5:00 PM today. At or after 5 PM, you can only make changes from the day after tomorrow onwards.',
+      pauseCutoffMessage: 'To modify tomorrow\'s delivery, you must do it before 4:00 PM today. At or after 4 PM, you can only make changes from the day after tomorrow onwards.',
       baseQuantityMl: customer.Subscription?.dailyQuantityMl ?? 1000,
     });
   } catch (e) {
@@ -770,16 +769,16 @@ router.post('/calendar/pause', isAuthenticated, isCustomer, async (req, res) => 
     if (pauseDate < todayStart) {
       return res.status(400).json({ error: 'Cannot pause a past date' });
     }
-    // To pause TOMORROW, request must be before TODAY 5 PM
-    // Business rule: Can pause before 5:00 PM (17:00), blocked at or after 5:00 PM (>= 17:00)
+    // To pause TOMORROW, request must be before TODAY 4 PM
+    // Business rule: Can pause before 4:00 PM (16:00), blocked at or after 4:00 PM (>= 16:00)
     const tomorrowStart = getStartOfDayIST(addDaysIST(now, 1));
     if (pauseDate.getTime() === tomorrowStart.getTime()) {
       const currentHour = getCurrentHourIST();
       if (currentHour >= PAUSE_CUTOFF_HOUR) {
         return res.status(400).json(createErrorResponse(
           ErrorCode.CUTOFF_TIME_EXCEEDED,
-          'To pause tomorrow, you must pause before 5:00 PM today. You can only pause from the day after tomorrow onward.',
-          { cutoff: '17:00' }
+          'To pause tomorrow, you must pause before 4:00 PM today. You can only pause from the day after tomorrow onward.',
+          { cutoff: '16:00' }
         ));
       }
     }
@@ -987,7 +986,7 @@ router.post('/calendar/bulk', isAuthenticated, isCustomer, async (req, res) => {
       // Check past dates
       if (targetDateUTC < todayUTC) continue;
 
-      // FIX: Check 5 PM cutoff for tomorrow using IST timezone
+      // FIX: Check 4 PM cutoff for tomorrow using IST timezone
       const tomorrowUTC = new Date(todayUTC);
       tomorrowUTC.setUTCDate(tomorrowUTC.getUTCDate() + 1);
 
@@ -997,7 +996,7 @@ router.post('/calendar/bulk', isAuthenticated, isCustomer, async (req, res) => {
         if (currentHourIST >= PAUSE_CUTOFF_HOUR) {
           const actionText = action === 'pause' ? 'pause' : action === 'resume' ? 'resume' : 'modify';
           return res.status(400).json({
-            error: `Cannot ${actionText} tomorrow's delivery at or after 5 PM. You can make changes from day after tomorrow onwards.`
+            error: `Cannot ${actionText} tomorrow's delivery at or after 4 PM. You can make changes from day after tomorrow onwards.`
           });
         }
       }
@@ -1038,7 +1037,7 @@ router.post('/calendar/bulk', isAuthenticated, isCustomer, async (req, res) => {
             largeBottles,
             smallBottles,
             deliveryNotes: notes ?? null,
-            chargePaise: calculateDailyPricePaise(quantityMl)
+            chargePaise: await calculateDailyPricePaise(quantityMl)
           },
         });
       } else if (action === 'resume') {
@@ -1060,7 +1059,7 @@ router.post('/calendar/bulk', isAuthenticated, isCustomer, async (req, res) => {
               largeBottles: sub.largeBotles ?? (quantityMl >= 1000 ? Math.floor(quantityMl / 1000) : 0),
               smallBottles: sub.smallBottles ?? (quantityMl % 1000 >= 500 ? 1 : 0),
               deliveryNotes: null,
-              chargePaise: calculateDailyPricePaise(quantityMl)
+              chargePaise: await calculateDailyPricePaise(quantityMl)
             },
           });
         }

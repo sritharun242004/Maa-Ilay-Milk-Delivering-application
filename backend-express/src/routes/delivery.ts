@@ -84,56 +84,58 @@ export async function ensureTodayDeliveries(deliveryPersonId: string, start: Dat
   const existingSet = new Set(existingDeliveries.map((d: any) => d.customerId));
   const modMap = new Map(modificationsForToday.map((m: any) => [m.customerId, m]));
 
-  const newDeliveries = eligibleCustomers
-    .filter((c) => {
-      if (existingSet.has(c.id)) return false;
-      const sub = c.Subscription;
-      if (!sub) return false;
+  const filtered = eligibleCustomers.filter((c) => {
+    if (existingSet.has(c.id)) return false;
+    const sub = c.Subscription;
+    if (!sub) return false;
 
-      // Check delivery start date set by admin (priority)
-      // Both dates are stored at UTC midnight, so direct comparison works
-      if (c.deliveryStartDate) {
-        const customerStartDate = new Date(c.deliveryStartDate);
-        // If customer's start date is AFTER the query date, don't create delivery
-        if (customerStartDate > start) return false;
-      }
+    if (c.deliveryStartDate) {
+      const customerStartDate = new Date(c.deliveryStartDate);
+      if (customerStartDate > start) return false;
+    }
 
-      // Subscription start date check
-      if (sub.startDate) {
-        const subStartDate = new Date(sub.startDate);
-        if (subStartDate > start) return false;
-      }
+    if (sub.startDate) {
+      const subStartDate = new Date(sub.startDate);
+      if (subStartDate > start) return false;
+    }
 
-      // Wallet balance check: negative balance = no delivery
-      const balance = c.Wallet?.balancePaise ?? 0;
-      if (balance < 0) return false; // Block if balance is negative
+    const balance = c.Wallet?.balancePaise ?? 0;
+    if (balance < 0) return false;
 
-      return true;
-    })
-    .map((c) => {
-      const sub = c.Subscription!;
-      const mod = modMap.get(c.id);
+    return true;
+  });
 
-      const quantityMl = mod ? mod.quantityMl : sub.dailyQuantityMl;
-      const largeBottles = mod ? mod.largeBottles : (sub.largeBotles ?? (quantityMl >= 1000 ? Math.floor(quantityMl / 1000) : 0));
-      const smallBottles = mod ? mod.smallBottles : (sub.smallBottles ?? (quantityMl % 1000 >= 500 ? 1 : 0));
+  // Pre-calculate prices for all needed quantities (async)
+  const quantitySet = new Set(filtered.map((c) => {
+    const mod = modMap.get(c.id);
+    return mod ? mod.quantityMl : c.Subscription!.dailyQuantityMl;
+  }));
+  const priceMap = new Map<number, number>();
+  for (const qty of quantitySet) {
+    priceMap.set(qty, await calculateDailyPricePaise(qty));
+  }
 
-      // Calculate price using central logic
-      const chargePaise = calculateDailyPricePaise(quantityMl);
+  const newDeliveries = filtered.map((c) => {
+    const sub = c.Subscription!;
+    const mod = modMap.get(c.id);
 
-      return {
-        customerId: c.id,
-        deliveryPersonId,
-        deliveryDate: start, // Save as UTC midnight
-        quantityMl,
-        largeBottles,
-        smallBottles,
-        chargePaise,
-        depositPaise: 0,
-        status: 'SCHEDULED' as const,
-        deliveryNotes: mod?.notes || null,
-      };
-    });
+    const quantityMl = mod ? mod.quantityMl : sub.dailyQuantityMl;
+    const largeBottles = mod ? mod.largeBottles : (sub.largeBotles ?? (quantityMl >= 1000 ? Math.floor(quantityMl / 1000) : 0));
+    const smallBottles = mod ? mod.smallBottles : (sub.smallBottles ?? (quantityMl % 1000 >= 500 ? 1 : 0));
+
+    return {
+      customerId: c.id,
+      deliveryPersonId,
+      deliveryDate: start,
+      quantityMl,
+      largeBottles,
+      smallBottles,
+      chargePaise: priceMap.get(quantityMl) ?? sub.dailyPricePaise,
+      depositPaise: 0,
+      status: 'SCHEDULED' as const,
+      deliveryNotes: mod?.notes || null,
+    };
+  });
 
   if (newDeliveries.length > 0) {
     // Race condition protection:
@@ -725,7 +727,7 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
 
           // Check if deposit should be charged
           if (shouldChargeDeposit(newDeliveryCount, subscription.lastDepositAtDelivery)) {
-            const depositAmount = calculateBottleDepositPaise(subscription.dailyQuantityMl);
+            const depositAmount = await calculateBottleDepositPaise(subscription.dailyQuantityMl);
 
             // Deduct deposit from wallet
             const wallet = delivery.Customer.Wallet;

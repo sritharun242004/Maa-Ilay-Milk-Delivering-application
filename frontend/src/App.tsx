@@ -43,6 +43,7 @@ const Inventory = React.lazy(() => import('./pages/admin/SimpleAdminPages').then
 const AdminPayments = React.lazy(() => import('./pages/admin/Payments').then(m => ({ default: m.AdminPayments })));
 const Penalties = React.lazy(() => import('./pages/admin/SimpleAdminPages').then(m => ({ default: m.Penalties })));
 const Settings = React.lazy(() => import('./pages/admin/SimpleAdminPages').then(m => ({ default: m.Settings })));
+const AdminProducts = React.lazy(() => import('./pages/admin/Products').then(m => ({ default: m.Products })));
 
 // Delivery pages
 const TodayDeliveries = React.lazy(() => import('./pages/delivery/TodayDeliveries').then(m => ({ default: m.TodayDeliveries })));
@@ -176,6 +177,14 @@ function App() {
                 element={
                   <ProtectedRoute allowedUserType="admin">
                     <DeliveryTeam />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/products"
+                element={
+                  <ProtectedRoute allowedUserType="admin">
+                    <AdminProducts />
                   </ProtectedRoute>
                 }
               />

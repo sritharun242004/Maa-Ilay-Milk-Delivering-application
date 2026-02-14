@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AdminLayout } from '../../components/layouts/AdminLayout';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
@@ -977,21 +978,20 @@ function ImposeFineModal({
 }
 
 export const Settings: React.FC = () => {
+  const navigate = useNavigate();
   return (
     <AdminLayout>
       <div className="max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold text-gray-900 mb-8">Settings</h1>
         <Card className="p-8 mb-8">
-          <h2 className="text-2xl font-bold mb-6">Milk Pricing</h2>
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="flex items-center justify-between">
             <div>
-              <label className="block text-sm font-medium mb-2">1L Milk Price (per day)</label>
-              <input type="number" value="110" className="w-full px-4 py-3 border-2 rounded-lg" />
+              <h2 className="text-2xl font-bold mb-1">Milk Pricing</h2>
+              <p className="text-gray-600">Manage daily prices and bottle deposit amounts from the Products page.</p>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">500ml Milk Price (per day)</label>
-              <input type="number" value="55" className="w-full px-4 py-3 border-2 rounded-lg" />
-            </div>
+            <Button onClick={() => navigate('/admin/products')}>
+              Manage Products
+            </Button>
           </div>
         </Card>
         <Card className="p-8">
@@ -1003,7 +1003,7 @@ export const Settings: React.FC = () => {
             </div>
             <div>
               <label className="block text-sm font-medium mb-2">Cutoff Time</label>
-              <input type="time" value="17:00" className="w-full px-4 py-3 border-2 rounded-lg" />
+              <input type="time" value="16:00" className="w-full px-4 py-3 border-2 rounded-lg" />
             </div>
           </div>
         </Card>
