@@ -18,8 +18,10 @@ import {
   logPenaltyImposed,
 } from '../utils/auditLog';
 import { MemoryCache } from '../lib/cache';
+import { getPenaltiesData, imposePenaltyOnCustomer } from '../services/penaltyService';
 
 const dashboardCache = new MemoryCache();
+const penaltiesCache = new MemoryCache();
 
 const router = Router();
 
@@ -1374,30 +1376,18 @@ router.get('/inventory', isAuthenticated, isAdmin, async (req, res) => {
 
 router.get('/penalties', isAuthenticated, isAdmin, async (req, res) => {
   try {
-    const { getPenaltyStatistics, getFlaggedCustomersDetailed } = await import('../services/penaltyService');
-    const [stats, flaggedCustomers] = await Promise.all([
-      getPenaltyStatistics(),
-      getFlaggedCustomersDetailed(),
-    ]);
+    const cacheKey = 'admin_penalties';
+    const cached = penaltiesCache.get(cacheKey);
+    if (cached) {
+      res.set('Cache-Control', 'private, max-age=120');
+      return res.json(cached);
+    }
 
-    // Add cache headers - penalties change less frequently
-    res.set('Cache-Control', 'private, max-age=60'); // 1 minute cache
-    res.json({
-      totalPendingBottles: stats.totalPendingBottles,
-      flaggedCustomersCount: stats.flaggedCustomersCount,
-      flaggedCustomers: flaggedCustomers.map(c => ({
-        id: c.id,
-        name: c.name,
-        phone: c.phone,
-        deliveryPersonName: c.deliveryPersonName,
-        largeBottles: c.largeBottles,
-        smallBottles: c.smallBottles,
-        totalBottles: c.largeBottles + c.smallBottles,
-        oldestBottleDate: c.oldestBottleDate,
-        daysOverdue: c.daysOverdue,
-      })),
-      rules: stats.rules,
-    });
+    const data = await getPenaltiesData();
+
+    penaltiesCache.set(cacheKey, data, 120_000); // 2 minute cache
+    res.set('Cache-Control', 'private, max-age=120');
+    res.json(data);
   } catch (e) {
     console.error('Admin penalties error:', e);
     res.status(500).json({ error: 'Failed to load penalty statistics' });
@@ -1569,7 +1559,6 @@ router.post('/penalties/impose', isAuthenticated, isAdmin, async (req, res) => {
 
     const fineAmountPaise = Math.round(fineAmountRs * 100);
 
-    const { imposePenaltyOnCustomer } = await import('../services/penaltyService');
     const result = await imposePenaltyOnCustomer(
       customerId,
       fineAmountPaise,
@@ -1578,8 +1567,11 @@ router.post('/penalties/impose', isAuthenticated, isAdmin, async (req, res) => {
     );
 
     if (result.success && req.user) {
-      // Audit log
-      await logPenaltyImposed(
+      // Invalidate cache so next load reflects the change
+      penaltiesCache.invalidate('admin_penalties');
+
+      // Audit log (non-blocking — don't slow down the response)
+      logPenaltyImposed(
         req.user.id,
         customerId,
         {
@@ -1589,7 +1581,7 @@ router.post('/penalties/impose', isAuthenticated, isAdmin, async (req, res) => {
           totalChargedRs: result.totalCharged,
         },
         req
-      );
+      ).catch(e => console.error('Audit log error:', e));
 
       res.json({
         success: true,

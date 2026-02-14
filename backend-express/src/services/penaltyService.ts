@@ -221,34 +221,25 @@ async function checkCustomerPenalties(customerId: string, customerName: string):
 }
 
 /**
- * Get detailed flagged customers list with bottle information
+ * Combined: get penalty stats + flagged customer details in TWO queries max.
+ * 1) Overdue bottles with customer info (single query)
+ * 2) Latest balances for flagged customers (single batched query)
+ *
+ * Optimized for remote DB: minimizes round-trips since each query has ~150ms latency.
  */
-export async function getFlaggedCustomersDetailed() {
+export async function getPenaltiesData() {
   const now = new Date();
   const thresholdDate = new Date(now);
   thresholdDate.setDate(thresholdDate.getDate() - PENALTY_THRESHOLD_DAYS);
 
-  // Find customers with overdue bottles
-  // FIX: Handle both issuedDate and createdAt (fallback for old records without issuedDate)
+  // Query 1: overdue bottles + customer balance in one go
+  // Include the latest ledger entry per customer to avoid separate balance queries
   const overdueBottles = await prisma.bottleLedger.findMany({
     where: {
       action: 'ISSUED',
       OR: [
-        {
-          issuedDate: {
-            lte: thresholdDate,
-          }
-        },
-        {
-          AND: [
-            { issuedDate: null },
-            {
-              createdAt: {
-                lte: thresholdDate,
-              }
-            }
-          ]
-        }
+        { issuedDate: { lte: thresholdDate } },
+        { AND: [{ issuedDate: null }, { createdAt: { lte: thresholdDate } }] },
       ],
       penaltyAppliedAt: null,
     },
@@ -258,9 +249,14 @@ export async function getFlaggedCustomersDetailed() {
           id: true,
           name: true,
           phone: true,
-          DeliveryPerson: {
+          DeliveryPerson: { select: { name: true } },
+          // Include latest bottle ledger entry to get current balance
+          BottleLedger: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
             select: {
-              name: true,
+              largeBottleBalanceAfter: true,
+              smallBottleBalanceAfter: true,
             },
           },
         },
@@ -269,23 +265,19 @@ export async function getFlaggedCustomersDetailed() {
     orderBy: { issuedDate: 'asc' },
   });
 
-  // Get unique customer IDs from overdue bottles
-  const customerIds = [...new Set(overdueBottles.map(b => b.customerId))];
-
-  // Get each customer's current bottle balance (from latest ledger entry)
-  const customerBalances = new Map<string, { large: number; small: number }>();
-  for (const customerId of customerIds) {
-    const latestLedger = await prisma.bottleLedger.findFirst({
-      where: { customerId },
-      orderBy: { createdAt: 'desc' },
-    });
-    customerBalances.set(customerId, {
-      large: latestLedger?.largeBottleBalanceAfter ?? 0,
-      small: latestLedger?.smallBottleBalanceAfter ?? 0,
-    });
+  if (overdueBottles.length === 0) {
+    return {
+      totalPendingBottles: 0,
+      flaggedCustomersCount: 0,
+      flaggedCustomers: [] as any[],
+      rules: [
+        `Bottle not returned after ${PENALTY_THRESHOLD_DAYS} days: ₹${LARGE_BOTTLE_PENALTY_PAISE / 100} (1L), ₹${SMALL_BOTTLE_PENALTY_PAISE / 100} (500ml)`,
+      ],
+    };
   }
 
-  // Group by customer, but cap at actual current balance
+  // Build flagged customers map and stats in single pass (no extra queries needed)
+  let totalPendingBottles = 0;
   const customerMap = new Map<string, {
     id: string;
     name: string;
@@ -293,27 +285,29 @@ export async function getFlaggedCustomersDetailed() {
     deliveryPersonName: string;
     largeBottles: number;
     smallBottles: number;
+    balanceLarge: number;
+    balanceSmall: number;
     oldestBottleDate: Date;
     daysOverdue: number;
-    bottleLedgerIds: string[];
   }>();
 
   for (const bottle of overdueBottles) {
-    const balance = customerBalances.get(bottle.customerId);
-    // Skip customers with no bottles currently outstanding
-    if (!balance || (balance.large === 0 && balance.small === 0)) continue;
+    const latestLedger = bottle.Customer.BottleLedger[0];
+    const balanceLarge = latestLedger?.largeBottleBalanceAfter ?? 0;
+    const balanceSmall = latestLedger?.smallBottleBalanceAfter ?? 0;
 
-    const existing = customerMap.get(bottle.customerId);
+    // Skip customers with no bottles currently outstanding
+    if (balanceLarge === 0 && balanceSmall === 0) continue;
+
+    totalPendingBottles += bottle.quantity;
+
     const bottleDate = bottle.issuedDate ? new Date(bottle.issuedDate) : new Date(bottle.createdAt);
     const daysOverdue = Math.floor((now.getTime() - bottleDate.getTime()) / (1000 * 60 * 60 * 24));
 
+    const existing = customerMap.get(bottle.customerId);
     if (existing) {
-      if (bottle.size === 'LARGE') {
-        existing.largeBottles += bottle.quantity;
-      } else {
-        existing.smallBottles += bottle.quantity;
-      }
-      existing.bottleLedgerIds.push(bottle.id);
+      if (bottle.size === 'LARGE') existing.largeBottles += bottle.quantity;
+      else existing.smallBottles += bottle.quantity;
       if (bottleDate < existing.oldestBottleDate) {
         existing.oldestBottleDate = bottleDate;
         existing.daysOverdue = daysOverdue;
@@ -326,25 +320,45 @@ export async function getFlaggedCustomersDetailed() {
         deliveryPersonName: bottle.Customer.DeliveryPerson?.name || 'Unassigned',
         largeBottles: bottle.size === 'LARGE' ? bottle.quantity : 0,
         smallBottles: bottle.size === 'SMALL' ? bottle.quantity : 0,
+        balanceLarge,
+        balanceSmall,
         oldestBottleDate: bottleDate,
         daysOverdue,
-        bottleLedgerIds: [bottle.id],
       });
     }
   }
 
-  // Cap reported bottles at actual current balance
+  // Cap at actual current balance
   for (const [customerId, entry] of customerMap) {
-    const balance = customerBalances.get(customerId)!;
-    entry.largeBottles = Math.min(entry.largeBottles, balance.large);
-    entry.smallBottles = Math.min(entry.smallBottles, balance.small);
-    // Remove entry if after capping, no bottles remain
+    entry.largeBottles = Math.min(entry.largeBottles, entry.balanceLarge);
+    entry.smallBottles = Math.min(entry.smallBottles, entry.balanceSmall);
     if (entry.largeBottles === 0 && entry.smallBottles === 0) {
       customerMap.delete(customerId);
     }
   }
 
-  return Array.from(customerMap.values()).sort((a, b) => b.daysOverdue - a.daysOverdue);
+  const flaggedCustomers = Array.from(customerMap.values())
+    .sort((a, b) => b.daysOverdue - a.daysOverdue)
+    .map(c => ({
+      id: c.id,
+      name: c.name,
+      phone: c.phone,
+      deliveryPersonName: c.deliveryPersonName,
+      largeBottles: c.largeBottles,
+      smallBottles: c.smallBottles,
+      totalBottles: c.largeBottles + c.smallBottles,
+      oldestBottleDate: c.oldestBottleDate,
+      daysOverdue: c.daysOverdue,
+    }));
+
+  return {
+    totalPendingBottles,
+    flaggedCustomersCount: flaggedCustomers.length,
+    flaggedCustomers,
+    rules: [
+      `Bottle not returned after ${PENALTY_THRESHOLD_DAYS} days: ₹${LARGE_BOTTLE_PENALTY_PAISE / 100} (1L), ₹${SMALL_BOTTLE_PENALTY_PAISE / 100} (500ml)`,
+    ],
+  };
 }
 
 /**
@@ -366,22 +380,33 @@ export async function imposePenaltyOnCustomer(
   thresholdDate.setDate(thresholdDate.getDate() - PENALTY_THRESHOLD_DAYS);
 
   try {
-    // Find customer's overdue bottles, ordered by date (oldest first)
-    const overdueBottles = await prisma.bottleLedger.findMany({
-      where: {
-        customerId,
-        action: 'ISSUED',
-        OR: [
-          { issuedDate: { lte: thresholdDate } },
-          { AND: [{ issuedDate: null }, { createdAt: { lte: thresholdDate } }] },
-        ],
-        penaltyAppliedAt: null,
-      },
-      orderBy: [{ issuedDate: 'asc' }, { createdAt: 'asc' }],
-    });
+    // Pre-fetch overdue bottles AND wallet + latest balance in parallel (before transaction)
+    const [overdueBottles, wallet, latestLedger] = await Promise.all([
+      prisma.bottleLedger.findMany({
+        where: {
+          customerId,
+          action: 'ISSUED',
+          OR: [
+            { issuedDate: { lte: thresholdDate } },
+            { AND: [{ issuedDate: null }, { createdAt: { lte: thresholdDate } }] },
+          ],
+          penaltyAppliedAt: null,
+        },
+        orderBy: [{ issuedDate: 'asc' }, { createdAt: 'asc' }],
+      }),
+      prisma.wallet.findUnique({ where: { customerId } }),
+      prisma.bottleLedger.findFirst({
+        where: { customerId },
+        orderBy: { createdAt: 'desc' },
+        select: { largeBottleBalanceAfter: true, smallBottleBalanceAfter: true },
+      }),
+    ]);
 
     if (overdueBottles.length === 0) {
       return { success: false, message: 'No overdue bottles found for this customer' };
+    }
+    if (!wallet) {
+      return { success: false, message: 'Wallet not found' };
     }
 
     // Separate by size and pick the oldest N entries for each
@@ -410,25 +435,22 @@ export async function imposePenaltyOnCustomer(
     }
 
     const fineRs = fineAmountPaise / 100;
+    const newBalance = wallet.balancePaise - fineAmountPaise;
+    const currentLargeBalance = latestLedger?.largeBottleBalanceAfter ?? 0;
+    const currentSmallBalance = latestLedger?.smallBottleBalanceAfter ?? 0;
 
-    // Charge fine in transaction
-    await prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.findUnique({ where: { customerId } });
-      if (!wallet) throw new Error('Wallet not found');
+    // Build description
+    const parts: string[] = [];
+    if (largeMarked > 0) parts.push(`${largeMarked}×1L`);
+    if (smallMarked > 0) parts.push(`${smallMarked}×500ml`);
 
-      const newBalance = wallet.balancePaise - fineAmountPaise;
-
-      await tx.wallet.update({
+    // Transaction: only writes, no reads (all data pre-fetched above)
+    await prisma.$transaction([
+      prisma.wallet.update({
         where: { customerId },
         data: { balancePaise: newBalance },
-      });
-
-      // Build description
-      const parts: string[] = [];
-      if (largeMarked > 0) parts.push(`${largeMarked}×1L`);
-      if (smallMarked > 0) parts.push(`${smallMarked}×500ml`);
-
-      await tx.walletTransaction.create({
+      }),
+      prisma.walletTransaction.create({
         data: {
           walletId: wallet.id,
           type: 'PENALTY_CHARGE',
@@ -437,53 +459,36 @@ export async function imposePenaltyOnCustomer(
           description: `Fine for empty bottles — ${totalFined} bottle${totalFined > 1 ? 's' : ''} not returned (${parts.join(', ')})`,
           referenceType: 'penalty',
         },
-      });
-
-      // Mark only the selected oldest bottles as penalized
-      await tx.bottleLedger.updateMany({
+      }),
+      prisma.bottleLedger.updateMany({
         where: { id: { in: idsToMark } },
         data: { penaltyAppliedAt: now },
-      });
-
-      // Create penalty ledger entries to update bottle balances
-      const latestLedger = await tx.bottleLedger.findFirst({
-        where: { customerId },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      const currentLargeBalance = latestLedger?.largeBottleBalanceAfter ?? 0;
-      const currentSmallBalance = latestLedger?.smallBottleBalanceAfter ?? 0;
-
-      if (largeMarked > 0) {
-        await tx.bottleLedger.create({
-          data: {
-            customerId,
-            action: 'PENALTY_CHARGED',
-            size: 'LARGE',
-            quantity: largeMarked,
-            largeBottleBalanceAfter: Math.max(0, currentLargeBalance - largeMarked),
-            smallBottleBalanceAfter: currentSmallBalance,
-            description: `Fine for empty bottles: ${largeMarked} × 1L (₹${fineRs})`,
-            penaltyAppliedAt: now,
-          },
-        });
-      }
-
-      if (smallMarked > 0) {
-        await tx.bottleLedger.create({
-          data: {
-            customerId,
-            action: 'PENALTY_CHARGED',
-            size: 'SMALL',
-            quantity: smallMarked,
-            largeBottleBalanceAfter: largeMarked > 0 ? Math.max(0, currentLargeBalance - largeMarked) : currentLargeBalance,
-            smallBottleBalanceAfter: Math.max(0, currentSmallBalance - smallMarked),
-            description: `Fine for empty bottles: ${smallMarked} × 500ml (₹${fineRs})`,
-            penaltyAppliedAt: now,
-          },
-        });
-      }
-    });
+      }),
+      ...(largeMarked > 0 ? [prisma.bottleLedger.create({
+        data: {
+          customerId,
+          action: 'PENALTY_CHARGED',
+          size: 'LARGE',
+          quantity: largeMarked,
+          largeBottleBalanceAfter: Math.max(0, currentLargeBalance - largeMarked),
+          smallBottleBalanceAfter: currentSmallBalance,
+          description: `Fine for empty bottles: ${largeMarked} × 1L (₹${fineRs})`,
+          penaltyAppliedAt: now,
+        },
+      })] : []),
+      ...(smallMarked > 0 ? [prisma.bottleLedger.create({
+        data: {
+          customerId,
+          action: 'PENALTY_CHARGED',
+          size: 'SMALL',
+          quantity: smallMarked,
+          largeBottleBalanceAfter: largeMarked > 0 ? Math.max(0, currentLargeBalance - largeMarked) : currentLargeBalance,
+          smallBottleBalanceAfter: Math.max(0, currentSmallBalance - smallMarked),
+          description: `Fine for empty bottles: ${smallMarked} × 500ml (₹${fineRs})`,
+          penaltyAppliedAt: now,
+        },
+      })] : []),
+    ]);
 
     return {
       success: true,
@@ -497,81 +502,4 @@ export async function imposePenaltyOnCustomer(
       message: error instanceof Error ? error.message : 'Failed to impose fine',
     };
   }
-}
-
-/**
- * Get penalty statistics
- */
-export async function getPenaltyStatistics() {
-  const now = new Date();
-
-  // Calculate total pending (customers with overdue bottles)
-  const thresholdDate = new Date(now);
-  thresholdDate.setDate(thresholdDate.getDate() - PENALTY_THRESHOLD_DAYS);
-
-  // Match the same query as getFlaggedCustomersDetailed to get consistent counts
-  const overdueBottles = await prisma.bottleLedger.findMany({
-    where: {
-      action: 'ISSUED',
-      OR: [
-        {
-          issuedDate: {
-            lte: thresholdDate,
-          },
-        },
-        {
-          AND: [
-            { issuedDate: null },
-            {
-              createdAt: {
-                lte: thresholdDate,
-              },
-            },
-          ],
-        },
-      ],
-      penaltyAppliedAt: null,
-    },
-    include: {
-      Customer: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-    },
-  });
-
-  // Get each customer's actual current bottle balance
-  const customerIds = [...new Set(overdueBottles.map(b => b.customerId))];
-  const customerBalances = new Map<string, { large: number; small: number }>();
-  for (const customerId of customerIds) {
-    const latestLedger = await prisma.bottleLedger.findFirst({
-      where: { customerId },
-      orderBy: { createdAt: 'desc' },
-    });
-    customerBalances.set(customerId, {
-      large: latestLedger?.largeBottleBalanceAfter ?? 0,
-      small: latestLedger?.smallBottleBalanceAfter ?? 0,
-    });
-  }
-
-  // Only count customers who actually have bottles outstanding
-  let totalPendingBottles = 0;
-  const flaggedCustomerIds = new Set<string>();
-
-  for (const bottle of overdueBottles) {
-    const balance = customerBalances.get(bottle.customerId);
-    if (!balance || (balance.large === 0 && balance.small === 0)) continue;
-    totalPendingBottles += bottle.quantity;
-    flaggedCustomerIds.add(bottle.customerId);
-  }
-
-  return {
-    totalPendingBottles,
-    flaggedCustomersCount: flaggedCustomerIds.size,
-    rules: [
-      `Bottle not returned after ${PENALTY_THRESHOLD_DAYS} days: ₹${LARGE_BOTTLE_PENALTY_PAISE / 100} (1L), ₹${SMALL_BOTTLE_PENALTY_PAISE / 100} (500ml)`,
-    ],
-  };
 }

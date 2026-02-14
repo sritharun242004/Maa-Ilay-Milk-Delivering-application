@@ -205,9 +205,10 @@ export const DeliveryHistory: React.FC = () => {
                     <span className="font-semibold">{quantityLabel(d.quantityMl)}</span>
                     <span className="text-gray-500">Bottles: {bottlesCollectedLabel(d.largeBottlesCollected, d.smallBottlesCollected)}</span>
                   </div>
-                  {d.deliveryNotes && (
-                    <p className="text-sm text-gray-500 mt-1">{d.deliveryNotes}</p>
-                  )}
+                  <div className="mt-2 pt-2 border-t border-gray-100">
+                    <p className="text-xs text-gray-400 mb-0.5">Remarks</p>
+                    <p className="text-sm text-gray-700">{d.deliveryNotes || '–'}</p>
+                  </div>
                 </Card>
               ))}
             </div>

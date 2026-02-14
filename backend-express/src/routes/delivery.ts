@@ -308,16 +308,13 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
     // 1. Ensure rows exist (mostly for new subscriptions or after midnight)
     await ensureTodayDeliveries(req.user.id, start, end);
 
-    // 2. Optimized Single Query: Fetching everything in one go with DB-side filtering
+    // 2. Optimized Single Query: Fetch ALL deliveries for this date
+    // Don't filter by Customer.status here — a delivered customer may have gone INACTIVE
+    // after being charged. The JS filter below handles active-check for SCHEDULED only.
     const deliveries = await prisma.delivery.findMany({
       where: {
         deliveryPersonId: req.user.id,
         deliveryDate: { gte: start, lte: end },
-        Customer: {
-          status: 'ACTIVE',
-          Pause: { none: { pauseDate: { gte: start, lte: end } } },
-          Subscription: { isNot: null }
-        }
       },
       include: {
         Customer: {
@@ -403,10 +400,12 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
         if (subStart > start) return false;
       }
 
-      // If already processed (Delivered/Not Delivered), show it anyway
+      // If already processed (Delivered/Not Delivered), show it regardless of customer status
+      // (customer may have gone INACTIVE after being charged)
       if (d.status !== 'SCHEDULED') return true;
 
-      // Wallet check ONLY for pending (SCHEDULED) deliveries
+      // For SCHEDULED deliveries: customer must be ACTIVE with sufficient balance
+      if (c.status !== 'ACTIVE') return false;
       const balance = c.Wallet?.balancePaise ?? 0;
       return balance >= 0; // Negative balance = don't show
     });
@@ -650,11 +649,21 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
     // Fetch inventory BEFORE transaction
     const inventory = await prisma.inventory.findFirst();
 
+    // Recalculate charge from current DB pricing (admin may have updated prices)
+    const currentChargePaise = shouldChargeWallet
+      ? await calculateDailyPricePaise(delivery.quantityMl)
+      : (delivery.chargePaise || 0);
+
+    // Update the delivery record with the current price if it changed
+    if (shouldChargeWallet && currentChargePaise !== delivery.chargePaise) {
+      updates.chargePaise = currentChargePaise;
+    }
+
     // Pre-check: Only block if current balance is ALREADY below grace limit
     // This handles stale deliveries for customers who shouldn't have them (e.g., deeply negative)
     // Customers within grace get charged normally — that IS the grace delivery
     if (shouldChargeWallet) {
-      const charge = delivery.chargePaise || 0;
+      const charge = currentChargePaise;
       const wallet = delivery.Customer.Wallet;
       if (wallet && charge > 0) {
         if (wallet.balancePaise < 0) {
@@ -783,7 +792,7 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
 
       // B. Deduct from wallet (for both DELIVERED and NOT_DELIVERED)
       if (shouldChargeWallet) {
-        const charge = delivery.chargePaise || 0;
+        const charge = currentChargePaise;
         if (charge > 0 && delivery.Customer.Wallet) {
           const newBalance = delivery.Customer.Wallet.balancePaise - charge;
 

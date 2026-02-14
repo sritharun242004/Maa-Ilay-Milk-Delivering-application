@@ -243,7 +243,7 @@ export const CustomerDashboard: React.FC = () => {
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-gray-900 mb-1">Complete Your Subscription</h3>
               <p className="text-sm text-gray-600 mb-3">
-                Select your daily milk quantity and start receiving fresh milk at your doorstep every morning at 6 AM.
+                Select your daily milk quantity and start receiving fresh milk at your doorstep every morning between 6-8 AM.
               </p>
               <Link
                 to="/customer/subscription"
@@ -278,8 +278,8 @@ export const CustomerDashboard: React.FC = () => {
           <div className="text-sm text-gray-600">
             <p className="font-medium text-gray-700 mb-1">Important</p>
             <ul className="list-disc pl-4 space-y-0.5">
-              <li>Delivery at 6 AM daily</li>
-              <li>Cutoff for changes: 5 PM previous day</li>
+              <li>Delivery between 6-8 AM daily</li>
+              <li>Cutoff for changes: 4 PM previous day</li>
               <li>Pause delivery anytime from Calendar</li>
               <li>Payment on the <strong>5th of every month</strong></li>
             </ul>

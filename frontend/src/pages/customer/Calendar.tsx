@@ -152,16 +152,16 @@ export const CustomerCalendar: React.FC = () => {
     const { dStr, isPast } = getDayData(day);
     if (isPast) return;
 
-    // Check if this is tomorrow and it's AFTER 5 PM (locked)
-    // Business rule: Can pause until 5:00 PM, blocked after 5:00 PM
+    // Check if this is tomorrow and it's AFTER 4 PM (locked)
+    // Business rule: Can pause until 4:00 PM, blocked after 4:00 PM
     const now = new Date();
     const currentHour = now.getHours();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
 
-    if (currentHour >= 17 && dStr === tomorrowStr) {
-      setError('Cannot modify tomorrow\'s delivery after 5 PM. You can make changes from day after tomorrow onwards.');
+    if (currentHour >= 16 && dStr === tomorrowStr) {
+      setError('Cannot modify tomorrow\'s delivery after 4 PM. You can make changes from day after tomorrow onwards.');
       return;
     }
 
@@ -225,15 +225,15 @@ export const CustomerCalendar: React.FC = () => {
   }, []);
 
   const undoPause = async (dateToUnpause: string) => {
-    // Check if trying to undo tomorrow after 5 PM cutoff
+    // Check if trying to undo tomorrow after 4 PM cutoff
     const now = new Date();
     const currentHour = now.getHours();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
 
-    if (currentHour >= 17 && dateToUnpause === tomorrowStr) {
-      setError('Cannot undo tomorrow\'s pause after 5 PM. You can make changes from day after tomorrow onwards.');
+    if (currentHour >= 16 && dateToUnpause === tomorrowStr) {
+      setError('Cannot undo tomorrow\'s pause after 4 PM. You can make changes from day after tomorrow onwards.');
       return;
     }
 
@@ -271,17 +271,17 @@ export const CustomerCalendar: React.FC = () => {
   const handleBulkAction = async (action: 'pause' | 'resume' | 'modify', quantityMl?: number) => {
     if (selectedDates.size === 0 || saving) return;
 
-    // Check if any selected date is locked due to 5 PM cutoff
-    // Business rule: Can modify until 5:00 PM, blocked at or after 5:00 PM
+    // Check if any selected date is locked due to 4 PM cutoff
+    // Business rule: Can modify until 4:00 PM, blocked at or after 4:00 PM
     const now = new Date();
     const currentHour = now.getHours();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
 
-    if (currentHour >= 17 && selectedDates.has(tomorrowStr)) {
+    if (currentHour >= 16 && selectedDates.has(tomorrowStr)) {
       const actionText = action === 'pause' ? 'pause' : action === 'resume' ? 'resume' : 'modify';
-      setError(`Cannot ${actionText} tomorrow's delivery after 5 PM. You can make changes from day after tomorrow onwards.`);
+      setError(`Cannot ${actionText} tomorrow's delivery after 4 PM. You can make changes from day after tomorrow onwards.`);
       return;
     }
 
@@ -437,7 +437,7 @@ export const CustomerCalendar: React.FC = () => {
             <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-900">
               <p className="font-bold mb-1">Cutoff Time Rule:</p>
-              <p>You can pause, resume, or modify <strong>tomorrow's delivery</strong> only if you do it <strong>before 5 PM today</strong>. At or after 5 PM, you can only make changes from day after tomorrow onwards.</p>
+              <p>You can pause, resume, or modify <strong>tomorrow's delivery</strong> only if you do it <strong>before 4 PM today</strong>. At or after 4 PM, you can only make changes from day after tomorrow onwards.</p>
             </div>
           </div>
         </div>

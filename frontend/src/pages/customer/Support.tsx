@@ -30,12 +30,12 @@ export const Support: React.FC = () => {
     {
       question: 'How do I pause my subscription?',
       answer:
-        'Go to the Calendar page and click on the dates you want to pause delivery. Changes must be made before 5 PM the previous day.',
+        'Go to the Calendar page and click on the dates you want to pause delivery. Changes must be made before 4 PM the previous day.',
     },
     {
       question: 'What is the cutoff time for changes?',
       answer:
-        'All changes to your delivery (pause, quantity changes) must be made before 5 PM the previous day.',
+        'All changes to your delivery (pause, quantity changes) must be made before 4 PM the previous day.',
     },
     {
       question: 'How do bottle deposits work?',

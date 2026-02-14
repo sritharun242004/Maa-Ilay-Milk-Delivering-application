@@ -238,63 +238,75 @@ export const TodayDeliveries: React.FC = () => {
           </div>
         </div>
 
-        {/* Pending Deliveries Section */}
-        {scheduledDeliveries.length > 0 && (
-          <Card className="mb-6">
-            <div className="p-4 bg-amber-50 border-b border-amber-100">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-amber-600" />
-                Pending Deliveries ({scheduledDeliveries.length})
-              </h2>
-              <p className="text-sm text-gray-600 mt-1">Click on any customer to mark delivery status</p>
-            </div>
-            <div className="divide-y divide-gray-100">
-              {scheduledDeliveries.map((delivery: DeliveryRow, index: number) => (
-                <DeliveryCard
-                  key={delivery.id}
-                  delivery={delivery}
-                  index={index}
-                  onView={handleViewCustomer}
-                  onPrefetch={prefetchCustomer}
-                  selectedDate={selectedDate}
-                />
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* Completed Deliveries Section */}
-        {completedDeliveries.length > 0 && (
-          <Card className="mb-6">
-            <div className="p-4 bg-green-50 border-b border-green-100">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-green-800" />
-                Completed Deliveries ({completedDeliveries.length})
-              </h2>
-            </div>
-            <div className="divide-y divide-gray-100">
-              {completedDeliveries.map((delivery: DeliveryRow, index: number) => (
-                <DeliveryCard
-                  key={delivery.id}
-                  delivery={delivery}
-                  index={scheduledDeliveries.length + index}
-                  onView={handleViewCustomer}
-                  onPrefetch={prefetchCustomer}
-                  selectedDate={selectedDate}
-                  isCompleted
-                />
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* Empty State */}
-        {deliveries.length === 0 && (
+        {deliveries.length === 0 ? (
+          /* Empty State */
           <Card className="p-12 text-center">
             <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-xl text-gray-500 mb-2">No deliveries scheduled</p>
             <p className="text-gray-400">No deliveries found for this date</p>
           </Card>
+        ) : (
+          <>
+            {/* Pending Deliveries Section */}
+            <Card className="mb-6">
+              <div className="p-4 bg-amber-50 border-b border-amber-100">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-amber-600" />
+                  Pending Deliveries ({scheduledDeliveries.length})
+                </h2>
+                {scheduledDeliveries.length > 0 && (
+                  <p className="text-sm text-gray-600 mt-1">Click on any customer to mark delivery status</p>
+                )}
+              </div>
+              {scheduledDeliveries.length > 0 ? (
+                <div className="divide-y divide-gray-100">
+                  {scheduledDeliveries.map((delivery: DeliveryRow, index: number) => (
+                    <DeliveryCard
+                      key={delivery.id}
+                      delivery={delivery}
+                      index={index}
+                      onView={handleViewCustomer}
+                      onPrefetch={prefetchCustomer}
+                      selectedDate={selectedDate}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 text-center text-gray-400">
+                  All deliveries completed
+                </div>
+              )}
+            </Card>
+
+            {/* Completed Deliveries Section */}
+            <Card className="mb-6">
+              <div className="p-4 bg-green-50 border-b border-green-100">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-800" />
+                  Completed Deliveries ({completedDeliveries.length})
+                </h2>
+              </div>
+              {completedDeliveries.length > 0 ? (
+                <div className="divide-y divide-gray-100">
+                  {completedDeliveries.map((delivery: DeliveryRow, index: number) => (
+                    <DeliveryCard
+                      key={delivery.id}
+                      delivery={delivery}
+                      index={scheduledDeliveries.length + index}
+                      onView={handleViewCustomer}
+                      onPrefetch={prefetchCustomer}
+                      selectedDate={selectedDate}
+                      isCompleted
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 text-center text-gray-400">
+                  No deliveries completed yet
+                </div>
+              )}
+            </Card>
+          </>
         )}
       </div>
     </DeliveryLayout>

@@ -30,6 +30,7 @@ export const CustomerOnboarding: React.FC = () => {
     city: 'Pondicherry',
     pincode: '',
   });
+  const [pincodeMode, setPincodeMode] = useState<'select' | 'manual'>('select');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -188,12 +189,18 @@ export const CustomerOnboarding: React.FC = () => {
                 onPlaceSelected={(place) => {
                   const serviceablePincodes = SERVICEABLE_AREAS.map(a => a.pincode);
                   const autoPin = place.pincode?.replace(/\D/g, '') || '';
+                  const isServiceable = serviceablePincodes.includes(autoPin);
+                  if (autoPin && !isServiceable) {
+                    setPincodeMode('manual');
+                  } else if (isServiceable) {
+                    setPincodeMode('select');
+                  }
                   setFormData((prev) => ({
                     ...prev,
                     addressLine1: place.addressLine1 || prev.addressLine1,
                     addressLine2: place.addressLine2 || prev.addressLine2,
                     city: place.city || prev.city,
-                    pincode: serviceablePincodes.includes(autoPin) ? autoPin : prev.pincode,
+                    pincode: autoPin || prev.pincode,
                   }));
                 }}
                 className={inputClasses}
@@ -266,10 +273,17 @@ export const CustomerOnboarding: React.FC = () => {
                 </label>
                 <div className="relative">
                   <select
-                    name="pincode"
-                    value={formData.pincode}
-                    onChange={handleChange}
-                    required
+                    value={pincodeMode === 'manual' ? 'others' : formData.pincode}
+                    onChange={(e) => {
+                      if (e.target.value === 'others') {
+                        setPincodeMode('manual');
+                        setFormData((prev) => ({ ...prev, pincode: '' }));
+                      } else {
+                        setPincodeMode('select');
+                        setFormData((prev) => ({ ...prev, pincode: e.target.value }));
+                      }
+                    }}
+                    required={pincodeMode === 'select'}
                     className={`${inputClasses} appearance-none pr-8`}
                   >
                     <option value="">Select your area</option>
@@ -278,10 +292,27 @@ export const CustomerOnboarding: React.FC = () => {
                         {a.area} - {a.pincode}
                       </option>
                     ))}
+                    <option value="others">Others (Enter manually)</option>
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 </div>
-                <p className="text-xs text-gray-400 mt-1">We currently deliver only in these areas</p>
+                {pincodeMode === 'manual' && (
+                  <input
+                    type="text"
+                    name="pincode"
+                    value={formData.pincode}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                    required
+                    pattern="[0-9]{6}"
+                    placeholder="Enter 6-digit pincode"
+                    className={`${inputClasses} mt-2`}
+                  />
+                )}
+                <p className="text-xs text-gray-400 mt-1">
+                  {pincodeMode === 'manual'
+                    ? 'Enter your 6-digit pincode'
+                    : 'Select your area or choose "Others" to enter manually'}
+                </p>
               </div>
             </div>
 

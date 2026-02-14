@@ -654,19 +654,23 @@ export const Penalties: React.FC = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<FlaggedCustomer | null>(null);
   const [imposing, setImposing] = useState(false);
   const [imposeResult, setImposeResult] = useState<string | null>(null);
+  const hasLoadedOnce = React.useRef(false);
 
-  const fetchData = () => {
-    setLoading(true);
+  const fetchData = useCallback(() => {
+    if (!hasLoadedOnce.current) setLoading(true); // Only show spinner on first load
     setError(null);
     fetch(getApiUrl('/api/admin/penalties'), { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load penalties');
         return res.json();
       })
-      .then(setData)
-      .catch(() => setError('Could not load penalties'))
+      .then((d) => {
+        hasLoadedOnce.current = true;
+        setData(d);
+      })
+      .catch(() => { if (!hasLoadedOnce.current) setError('Could not load penalties'); })
       .finally(() => setLoading(false));
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -802,8 +806,18 @@ export const Penalties: React.FC = () => {
           }}
           onSuccess={(message) => {
             setImposeResult(`✓ ${message}`);
+            // Optimistically remove the fined customer from local state
+            if (data && selectedCustomer) {
+              const updated = {
+                ...data,
+                flaggedCustomers: data.flaggedCustomers.filter(c => c.id !== selectedCustomer.id),
+                flaggedCustomersCount: data.flaggedCustomersCount - 1,
+              };
+              setData(updated);
+            }
             setSelectedCustomer(null);
-            setTimeout(() => fetchData(), 500);
+            // Background refresh to get accurate data
+            fetchData();
           }}
           onError={(message) => {
             setImposeResult(`✗ ${message}`);

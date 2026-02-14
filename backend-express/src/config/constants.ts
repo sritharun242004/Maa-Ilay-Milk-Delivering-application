@@ -14,7 +14,7 @@
  * Customers can pause tomorrow's delivery until this hour (5:00 PM IST)
  * After this hour, they can only pause from day after tomorrow onwards
  */
-export const PAUSE_CUTOFF_HOUR = 17; // 5:00 PM
+export const PAUSE_CUTOFF_HOUR = 16; // 4:00 PM
 
 /**
  * Payment day of the month

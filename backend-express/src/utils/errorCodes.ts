@@ -134,7 +134,7 @@ export function getErrorMessage(code: ErrorCode): string {
     [ErrorCode.DELIVERY_ALREADY_COMPLETED]: 'This delivery has already been completed',
     [ErrorCode.DELIVERY_PAUSED]: 'Delivery is paused for this date',
     [ErrorCode.INVALID_DELIVERY_STATUS]: 'Invalid delivery status',
-    [ErrorCode.CUTOFF_TIME_EXCEEDED]: 'Cannot modify tomorrow\'s delivery after 5 PM',
+    [ErrorCode.CUTOFF_TIME_EXCEEDED]: 'Cannot modify tomorrow\'s delivery after 4 PM',
     [ErrorCode.DELIVERY_START_DATE_INVALID]: 'Delivery start date must be today or a future date',
 
     // Bottles

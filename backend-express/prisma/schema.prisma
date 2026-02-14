@@ -60,6 +60,7 @@ model BottleLedger {
   @@index([customerId])
   @@index([issuedDate])
   @@index([customerId, createdAt])
+  @@index([action, penaltyAppliedAt])
 }
 
 model Customer {

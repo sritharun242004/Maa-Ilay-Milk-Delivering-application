@@ -144,7 +144,7 @@ export const SERVICEABLE_PINCODES = [
 ];
 
 /**
- * Sanitize pincode (Indian postal codes) — must be a serviceable area
+ * Sanitize pincode (Indian postal codes) — accepts any valid 6-digit pincode
  */
 export function sanitizePincode(pincode: string | null | undefined): string {
   if (!pincode) return '';
@@ -153,10 +153,6 @@ export function sanitizePincode(pincode: string | null | undefined): string {
 
   if (cleaned.length !== 6) {
     throw new Error('Pincode must be 6 digits');
-  }
-
-  if (!SERVICEABLE_PINCODES.includes(cleaned)) {
-    throw new Error('Sorry, we currently deliver only in select Pondicherry areas. Please choose a serviceable pincode.');
   }
 
   return cleaned;
