@@ -210,7 +210,7 @@ app.use(
     saveUninitialized: false,
     store: new CachedSessionStore(prismaStore),
     cookie: {
-      secure: process.env.NODE_ENV === 'production', // HTTPS in production
+      secure: process.env.SECURE_COOKIES === 'true', // Enable only when HTTPS is configured
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
       sameSite: 'lax', // Same-origin serving, no need for 'none'
