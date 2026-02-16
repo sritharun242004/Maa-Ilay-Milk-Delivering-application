@@ -14,12 +14,6 @@ const CASHFREE_BASE_URL = process.env.CASHFREE_ENVIRONMENT === 'PRODUCTION'
 const APP_ID = process.env.CASHFREE_APP_ID || '';
 const SECRET_KEY = process.env.CASHFREE_SECRET_KEY || '';
 
-// Startup diagnostic - helps debug credential issues on deployed environments
-console.log(`[Cashfree] Environment: ${process.env.CASHFREE_ENVIRONMENT || 'NOT SET'}`);
-console.log(`[Cashfree] Base URL: ${CASHFREE_BASE_URL}`);
-console.log(`[Cashfree] APP_ID: ${APP_ID ? `${APP_ID.substring(0, 8)}...${APP_ID.substring(APP_ID.length - 4)} (len=${APP_ID.length})` : '❌ NOT SET'}`);
-console.log(`[Cashfree] SECRET_KEY: ${SECRET_KEY ? `SET (len=${SECRET_KEY.length})` : '❌ NOT SET'}`);
-
 interface CreateOrderParams {
   customerId: string;
   customerName: string;
@@ -71,8 +65,6 @@ export async function createCashfreeOrder(params: CreateOrderParams): Promise<Cr
       order_note: purpose,
     };
 
-    console.log('Creating Cashfree order:', { orderId, amount: amountRupees });
-
     // Make API request to Cashfree
     const response = await axios.post(
       `${CASHFREE_BASE_URL}/orders`,
@@ -92,8 +84,6 @@ export async function createCashfreeOrder(params: CreateOrderParams): Promise<Cr
     }
 
     const orderData = response.data;
-
-    console.log('Cashfree order created:', { orderId, sessionId: orderData.payment_session_id });
 
     // Save payment order to database
     await prisma.paymentOrder.create({

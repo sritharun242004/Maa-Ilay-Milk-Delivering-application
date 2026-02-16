@@ -33,9 +33,6 @@ export const DeliveryTeam: React.FC = () => {
   // Use cached data hook with 1-hour TTL
   const { data, loading, error, refetch: fetchTeam } = useDeliveryTeam();
 
-  // Debug logging
-  console.log('[DeliveryTeam] State:', { data, loading, error });
-
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);

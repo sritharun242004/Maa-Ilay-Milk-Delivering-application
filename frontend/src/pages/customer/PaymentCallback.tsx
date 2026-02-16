@@ -27,14 +27,9 @@ export const PaymentCallback: React.FC = () => {
       // Get order_id from URL query params
       const orderId = searchParams.get('order_id');
 
-      // Debug logging
-      console.log('Current URL:', window.location.href);
-      console.log('Search params:', Object.fromEntries(searchParams.entries()));
-      console.log('Order ID from URL:', orderId);
-
       if (!orderId) {
         setStatus('failed');
-        setMessage('Invalid payment session. No order ID found. URL: ' + window.location.href);
+        setMessage('Invalid payment session. No order ID found.');
         return;
       }
 

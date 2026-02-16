@@ -93,10 +93,7 @@ export const Wallet: React.FC = () => {
 
       const data = await response.json();
 
-      console.log('Payment order response:', data);
-
       if (!data.success || !data.paymentSessionId) {
-        console.error('Payment initiation failed:', data);
         setAddMoneyError(data.error || 'Failed to initiate payment. Check console for details.');
         setSubmitting(false);
         return;
@@ -110,10 +107,6 @@ export const Wallet: React.FC = () => {
         return;
       }
 
-      console.log('Initializing Cashfree checkout');
-      console.log('Payment Session ID:', data.paymentSessionId);
-      console.log('Order ID:', data.orderId);
-
       // @ts-ignore - Cashfree v3 SDK
       const cashfree = window.Cashfree({
         mode: 'sandbox' // Always sandbox for now (change to 'production' for live)
@@ -121,16 +114,14 @@ export const Wallet: React.FC = () => {
 
       // Redirect to Cashfree payment page with order_id in return URL
       const returnUrl = `${window.location.origin}/payment/callback?order_id=${data.orderId}`;
-      console.log('Return URL:', returnUrl);
 
       cashfree.checkout({
         paymentSessionId: data.paymentSessionId,
         returnUrl: returnUrl,
         redirectTarget: '_self' // Open in same tab
       }).then(() => {
-        console.log('Cashfree checkout initiated successfully');
+        // Checkout initiated
       }).catch((error: any) => {
-        console.error('Cashfree checkout error:', error);
         setAddMoneyError('Failed to open payment page. Please try again.');
         setSubmitting(false);
       });
@@ -139,7 +130,7 @@ export const Wallet: React.FC = () => {
       // After payment, they'll be redirected back to /payment/callback
 
     } catch (err) {
-      console.error('Payment error:', err);
+      // Payment error
       setAddMoneyError('Failed to initiate payment. Please try again.');
       setSubmitting(false);
     }
