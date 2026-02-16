@@ -113,7 +113,7 @@ router.post('/complete-profile', isAuthenticated, isCustomer, async (req, res) =
     }
 
     // Handle validation/sanitization errors (thrown by sanitize functions)
-    if (error instanceof Error && !error.code) {
+    if (error instanceof Error && !(error as any).code) {
       return res.status(400).json({ error: error.message });
     }
 
