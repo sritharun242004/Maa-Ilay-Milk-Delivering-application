@@ -22,8 +22,8 @@ const csrfConfig = doubleCsrf({
   cookieName: 'maa-ilay.csrf', // Changed from __Host- to allow localhost
   cookieOptions: {
     httpOnly: true,
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax', // Lax for dev
-    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    secure: process.env.SECURE_COOKIES === 'true',
     path: '/',
   },
   size: 64, // Token size
