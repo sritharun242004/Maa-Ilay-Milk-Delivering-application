@@ -109,7 +109,7 @@ export const Wallet: React.FC = () => {
 
       // @ts-ignore - Cashfree v3 SDK
       const cashfree = window.Cashfree({
-        mode: 'sandbox' // Always sandbox for now (change to 'production' for live)
+        mode: 'production'
       });
 
       // Redirect to Cashfree payment page with order_id in return URL
@@ -346,12 +346,6 @@ export const Wallet: React.FC = () => {
                 </div>
               </form>
 
-              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs text-blue-900">
-                  <Info className="w-4 h-4 inline mr-1" />
-                  <strong>TEST MODE:</strong> No real money will be charged. Use test card 4111 1111 1111 1111 for testing.
-                </p>
-              </div>
             </Card>
           </div>
         )}
