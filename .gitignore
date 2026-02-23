@@ -49,3 +49,6 @@ next-env.d.ts
 # logs
 /logs
 *.log
+
+# deployment docs (contains credentials)
+DEPLOYMENT-KT.md
