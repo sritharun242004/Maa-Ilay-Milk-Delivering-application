@@ -150,10 +150,12 @@ export const Home: React.FC = () => {
                 key={index}
                 className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200"
               >
-                <div className="w-11 h-11 bg-green-800 rounded-full flex items-center justify-center mb-5">
-                  <item.icon className="w-5 h-5 text-white" />
+                <div className="flex items-center gap-3 mb-3 md:block">
+                  <div className="w-11 h-11 bg-green-800 rounded-full flex items-center justify-center flex-shrink-0 md:mb-5">
+                    <item.icon className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 md:mb-2">{item.title}</h3>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{item.title}</h3>
                 <p className="text-sm text-gray-600 leading-relaxed">{item.description}</p>
               </div>
             ))}
