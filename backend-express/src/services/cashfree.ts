@@ -21,6 +21,9 @@ interface CreateOrderParams {
   customerPhone: string;
   amountPaise: number;
   purpose: string;
+  monthlyPaymentId?: string;
+  isFirstPayment?: boolean;
+  dailyQuantityMl?: number;
 }
 
 interface CreateOrderResponse {
@@ -35,16 +38,14 @@ interface CreateOrderResponse {
  */
 export async function createCashfreeOrder(params: CreateOrderParams): Promise<CreateOrderResponse> {
   try {
-    const { customerId, customerName, customerEmail, customerPhone, amountPaise, purpose } = params;
+    const { customerId, customerName, customerEmail, customerPhone, amountPaise, purpose, monthlyPaymentId, isFirstPayment, dailyQuantityMl } = params;
 
     // Convert paise to rupees
     const amountRupees = (amountPaise / 100).toFixed(2);
 
     // Generate cryptographically secure unique order ID
-    // Format: order_{timestamp}_{random_hex}
-    // Example: order_1739788922331_a1b2c3d4e5f6g7h8
     const timestamp = Date.now();
-    const randomSuffix = randomBytes(8).toString('hex'); // 16 characters of secure randomness
+    const randomSuffix = randomBytes(8).toString('hex');
     const orderId = `order_${timestamp}_${randomSuffix}`;
 
     // Create order request
@@ -85,7 +86,7 @@ export async function createCashfreeOrder(params: CreateOrderParams): Promise<Cr
 
     const orderData = response.data;
 
-    // Save payment order to database
+    // Save payment order to database with metadata about payment type
     await prisma.paymentOrder.create({
       data: {
         customerId,
@@ -97,6 +98,8 @@ export async function createCashfreeOrder(params: CreateOrderParams): Promise<Cr
         metadata: {
           paymentSessionId: orderData.payment_session_id,
           cfOrderId: orderData.cf_order_id,
+          ...(monthlyPaymentId && { monthlyPaymentId }),
+          ...(isFirstPayment && { isFirstPayment: true, dailyQuantityMl }),
         },
       },
     });
@@ -137,7 +140,6 @@ export async function verifyAndProcessPayment(params: VerifyPaymentParams): Prom
     console.log('Verifying payment for order:', orderId);
 
     // CRITICAL: Use transaction with SELECT FOR UPDATE to prevent race conditions
-    // This ensures only one verification process can run for the same order at a time
     return await prisma.$transaction(async (tx) => {
       // Lock the payment order row to prevent concurrent processing
       const paymentOrder = await tx.paymentOrder.findUnique({
@@ -149,7 +151,6 @@ export async function verifyAndProcessPayment(params: VerifyPaymentParams): Prom
       }
 
       // IDEMPOTENCY CHECK: If already processed, return success immediately
-      // This prevents double-crediting if verify is called multiple times
       if (paymentOrder.status === 'SUCCESS') {
         console.log(`Payment ${orderId} already processed. Returning cached result.`);
         return {
@@ -159,9 +160,6 @@ export async function verifyAndProcessPayment(params: VerifyPaymentParams): Prom
           customerId: paymentOrder.customerId,
         };
       }
-
-      // If status is PENDING, we need to check with Cashfree
-      // If status is FAILED, this is a retry attempt - allow it to proceed
 
       // Fetch payment status from Cashfree
       const response = await axios.get(
@@ -189,7 +187,6 @@ export async function verifyAndProcessPayment(params: VerifyPaymentParams): Prom
       );
 
       if (!successfulPayment) {
-        // Update status to failed if payment explicitly failed
         const failedPayment = payments.find((p: any) => p.payment_status === 'FAILED');
         if (failedPayment) {
           await tx.paymentOrder.update({
@@ -201,7 +198,7 @@ export async function verifyAndProcessPayment(params: VerifyPaymentParams): Prom
         return { success: false, verified: false, error: 'Payment not successful' };
       }
 
-      // Update payment order status to SUCCESS (within transaction)
+      // Update payment order status to SUCCESS
       await tx.paymentOrder.update({
         where: { gatewayOrderId: orderId },
         data: {
@@ -216,14 +213,40 @@ export async function verifyAndProcessPayment(params: VerifyPaymentParams): Prom
         },
       });
 
-      // Credit wallet balance (within same transaction for atomicity)
+      const metadata = paymentOrder.metadata as any;
+      const isFirstPayment = metadata?.isFirstPayment === true;
+      const monthlyPaymentId = metadata?.monthlyPaymentId;
+
+      // Credit wallet balance
       await creditWalletInTransaction(
         tx,
         paymentOrder.customerId,
         paymentOrder.amountPaise,
         orderId,
-        paymentOrder.purpose
+        paymentOrder.purpose,
+        isFirstPayment || monthlyPaymentId ? 'MONTHLY_PAYMENT' : 'WALLET_TOPUP'
       );
+
+      // Handle monthly payment completion
+      if (monthlyPaymentId) {
+        await tx.monthlyPayment.update({
+          where: { id: monthlyPaymentId },
+          data: {
+            status: 'PAID',
+            amountPaidPaise: paymentOrder.amountPaise,
+            amountDuePaise: 0,
+            paidAt: new Date(),
+            paymentOrderId: orderId,
+          },
+        });
+        console.log(`✅ Monthly payment ${monthlyPaymentId} marked as PAID`);
+      }
+
+      // Handle first-time subscription
+      if (isFirstPayment) {
+        const dailyQuantityMl = metadata.dailyQuantityMl;
+        await handleFirstSubscription(tx, paymentOrder.customerId, dailyQuantityMl);
+      }
 
       return {
         success: true,
@@ -232,8 +255,8 @@ export async function verifyAndProcessPayment(params: VerifyPaymentParams): Prom
         customerId: paymentOrder.customerId,
       };
     }, {
-      timeout: 15000, // 15 seconds timeout for payment verification
-      isolationLevel: 'Serializable', // Highest isolation to prevent any race conditions
+      timeout: 15000,
+      isolationLevel: 'Serializable',
     });
   } catch (error: any) {
     console.error('Cashfree verify payment error:', error.response?.data || error.message);
@@ -246,17 +269,114 @@ export async function verifyAndProcessPayment(params: VerifyPaymentParams): Prom
 }
 
 /**
+ * Handle first-time subscription after payment verification
+ */
+async function handleFirstSubscription(
+  tx: any,
+  customerId: string,
+  dailyQuantityMl: number
+): Promise<void> {
+  const { calculateDailyPricePaise, calculateBottleDepositPaise } = await import('../config/pricing');
+  const { calculateFirstPayment, daysInMonth } = await import('../utils/monthlyPaymentUtils');
+  const { getNowIST, getCurrentHourIST } = await import('../utils/dateUtils');
+  const { PAUSE_CUTOFF_HOUR, GRACE_PERIOD_END_DAY } = await import('../config/constants');
+
+  const dailyPricePaise = await calculateDailyPricePaise(dailyQuantityMl);
+  const largeBottles = Math.floor(dailyQuantityMl / 1000);
+  const smallBottles = (dailyQuantityMl % 1000) >= 500 ? 1 : 0;
+
+  const now = getNowIST();
+  const currentHour = getCurrentHourIST();
+
+  // Determine delivery start date (same logic as calculateFirstPayment)
+  let startDate: Date;
+  if (currentHour >= PAUSE_CUTOFF_HOUR) {
+    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
+  } else {
+    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  }
+
+  // Create subscription
+  await tx.subscription.upsert({
+    where: { customerId },
+    update: {
+      dailyQuantityMl,
+      dailyPricePaise,
+      largeBotles: largeBottles,
+      smallBottles,
+      status: 'ACTIVE',
+    },
+    create: {
+      customerId,
+      dailyQuantityMl,
+      dailyPricePaise,
+      largeBotles: largeBottles,
+      smallBottles,
+      status: 'ACTIVE',
+      startDate: now,
+      endDate: null,
+      currentCycleStart: now,
+      deliveryCount: 0,
+      lastDepositAtDelivery: 0,
+    },
+  });
+
+  // Set customer to PENDING_APPROVAL and delivery start date
+  await tx.customer.update({
+    where: { id: customerId },
+    data: {
+      status: 'PENDING_APPROVAL',
+      deliveryStartDate: startDate,
+    },
+  });
+
+  // Create MonthlyPayment record for partial first month
+  const startDay = startDate.getDate();
+  const year = startDate.getFullYear();
+  const month = startDate.getMonth() + 1; // 1-indexed
+  const totalDays = daysInMonth(year, month);
+  const remainingDays = totalDays - startDay + 1;
+  const totalCostPaise = dailyPricePaise * remainingDays;
+
+  await tx.monthlyPayment.upsert({
+    where: { customerId_year_month: { customerId, year, month } },
+    update: {
+      status: 'PAID',
+      amountPaidPaise: totalCostPaise,
+      amountDuePaise: 0,
+      paidAt: new Date(),
+    },
+    create: {
+      customerId,
+      year,
+      month,
+      totalCostPaise,
+      amountDuePaise: 0,
+      amountPaidPaise: totalCostPaise,
+      status: 'PAID',
+      dueDate: new Date(year, month - 1, GRACE_PERIOD_END_DAY),
+      paidAt: new Date(),
+      isFirstMonth: true,
+      startDay,
+      endDay: totalDays,
+    },
+  });
+
+  console.log(`✅ First subscription created for customer ${customerId}: ${dailyQuantityMl}ml, starts ${startDate.toISOString().split('T')[0]}`);
+}
+
+/**
  * Credit amount to customer's wallet within a transaction
- * IMPORTANT: This must be called within a Prisma transaction to ensure atomicity
  */
 async function creditWalletInTransaction(
-  tx: any, // Prisma transaction client
+  tx: any,
   customerId: string,
   amountPaise: number,
   referenceId: string,
-  description: string
+  description: string,
+  transactionType: 'WALLET_TOPUP' | 'MONTHLY_PAYMENT' = 'WALLET_TOPUP'
 ): Promise<void> {
-  // Get or create wallet (within transaction)
+  // Get or create wallet
   let wallet = await tx.wallet.findUnique({
     where: { customerId },
   });
@@ -285,10 +405,10 @@ async function creditWalletInTransaction(
   await tx.walletTransaction.create({
     data: {
       walletId: wallet.id,
-      type: 'WALLET_TOPUP',
+      type: transactionType,
       amountPaise,
       balanceAfterPaise: newBalance,
-      description: description || 'Wallet top-up via Cashfree',
+      description: description || 'Payment via Cashfree',
       referenceId,
       referenceType: 'PAYMENT_ORDER',
     },
@@ -298,7 +418,7 @@ async function creditWalletInTransaction(
 }
 
 /**
- * Credit amount to customer's wallet (standalone - for backward compatibility)
+ * Credit amount to customer's wallet (standalone)
  */
 async function creditWallet(
   customerId: string,
@@ -337,9 +457,6 @@ export function verifyWebhookSignature(
 
 /**
  * Handle webhook payment notification from Cashfree
- *
- * IMPORTANT: Cashfree may send duplicate webhook notifications
- * We use the payment order status as idempotency key to prevent duplicate processing
  */
 export async function handleWebhookNotification(webhookData: any): Promise<void> {
   try {
@@ -352,8 +469,6 @@ export async function handleWebhookNotification(webhookData: any): Promise<void>
 
       console.log(`📬 Webhook received: PAYMENT_SUCCESS for order ${orderId}`);
 
-      // IDEMPOTENCY: verifyAndProcessPayment already has idempotency checks
-      // It will only credit wallet once even if webhook is sent multiple times
       const result = await verifyAndProcessPayment({ orderId });
 
       if (result.success) {
@@ -370,12 +485,10 @@ export async function handleWebhookNotification(webhookData: any): Promise<void>
 
       console.log(`📬 Webhook received: PAYMENT_FAILED for order ${orderId}`);
 
-      // IDEMPOTENCY: updateMany only updates if status is not already FAILED
-      // Multiple webhook calls won't cause issues
       const updated = await prisma.paymentOrder.updateMany({
         where: {
           gatewayOrderId: orderId,
-          status: { not: 'FAILED' }, // Only update if not already failed
+          status: { not: 'FAILED' },
         },
         data: { status: 'FAILED' },
       });
@@ -384,8 +497,6 @@ export async function handleWebhookNotification(webhookData: any): Promise<void>
     }
   } catch (error) {
     console.error('Webhook handling error:', error);
-    // Re-throw error so webhook endpoint returns 500
-    // Cashfree will retry failed webhooks
     throw error;
   }
 }

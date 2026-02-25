@@ -1,14 +1,14 @@
 /**
  * My Life / Maa Ilay pricing (Rs. and paise)
- * Updated pricing structure with volume-based discounts:
- * - 500ml: ₹68/day
- * - 1L: ₹110/day
- * - 1.5L: ₹165/day
- * - 2L: ₹215/day
- * - 2.5L: ₹268/day
+ * Updated pricing structure (door delivery prices):
+ * - 500ml: ₹72/day
+ * - 1L: ₹120/day
+ * - 1.5L: ₹192/day
+ * - 2L: ₹240/day
+ * - 2.5L: ₹312/day
  *
  * Bottle deposit: ₹70 for 1L bottles, ₹50 for 500ml bottles (every 90 days)
- * Payment date: 5th of every month
+ * Payment due: 7th of every month (monthly upfront model)
  * Allowed daily quantities: 500ml to 2.5L only
  * Bottle load: 1L bottles + 500ml bottles (e.g. 2.5L = 2×1L + 1×500ml)
  *
@@ -22,36 +22,36 @@ export const ALLOWED_DAILY_QUANTITIES_ML = [500, 1000, 1500, 2000, 2500] as cons
 
 // Hardcoded fallback lookup tables (used by seed script and as defaults)
 export const DAILY_PRICE_MAP_PAISE: Record<number, number> = {
-  500: 6800,    // ₹68
-  1000: 11000,  // ₹110
-  1500: 16500,  // ₹165
-  2000: 21500,  // ₹215
-  2500: 26800,  // ₹268
+  500: 7200,    // ₹72
+  1000: 12000,  // ₹120
+  1500: 19200,  // ₹192
+  2000: 24000,  // ₹240
+  2500: 31200,  // ₹312
 };
 
 export const DAILY_PRICE_MAP_RS: Record<number, number> = {
-  500: 68,
-  1000: 110,
-  1500: 165,
-  2000: 215,
-  2500: 268,
+  500: 72,
+  1000: 120,
+  1500: 192,
+  2000: 240,
+  2500: 312,
 };
 
 export const PRICING = {
-  DAILY_1L_PAISE: 11000,
-  DAILY_500ML_PAISE: 6800,
-  DAILY_1L_RS: 110,
-  DAILY_500ML_RS: 68,
-  MIN_BALANCE_3_DAYS_1L_RS: 330,
-  MIN_BALANCE_1_DAY_1L_RS: 110,
-  MIN_BALANCE_3_DAYS_500ML_RS: 204,
-  MIN_BALANCE_1_DAY_500ML_RS: 68,
+  DAILY_1L_PAISE: 12000,
+  DAILY_500ML_PAISE: 7200,
+  DAILY_1L_RS: 120,
+  DAILY_500ML_RS: 72,
+  MIN_BALANCE_3_DAYS_1L_RS: 360,
+  MIN_BALANCE_1_DAY_1L_RS: 120,
+  MIN_BALANCE_3_DAYS_500ML_RS: 216,
+  MIN_BALANCE_1_DAY_500ML_RS: 72,
   DEPOSIT_1L_PAISE: 7000,
   DEPOSIT_500ML_PAISE: 5000,
   DEPOSIT_1L_RS: 70,
   DEPOSIT_500ML_RS: 50,
   DEPOSIT_EVERY_CYCLES: 3,
-  PAYMENT_DAY: 5,
+  PAYMENT_DAY: 7,
 } as const;
 
 /**

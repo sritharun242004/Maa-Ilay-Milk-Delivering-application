@@ -49,6 +49,7 @@ model BottleLedger {
   deliveryId                  String?
   description                 String
   issuedDate                  DateTime?
+  returnedAt                  DateTime?
   penaltyAppliedAt            DateTime?
   performedByAdminId          String?
   performedByDeliveryPersonId String?
@@ -87,6 +88,7 @@ model Customer {
   DeliveryPerson       DeliveryPerson?        @relation(fields: [deliveryPersonId], references: [id])
   Delivery             Delivery[]
   DeliveryModification DeliveryModification[]
+  MonthlyPayment       MonthlyPayment[]
   Pause                Pause[]
   Subscription         Subscription?
   Wallet               Wallet?
@@ -349,6 +351,7 @@ enum SubscriptionStatus {
 
 enum TransactionType {
   WALLET_TOPUP
+  MONTHLY_PAYMENT
   MILK_CHARGE
   DEPOSIT_CHARGE
   PENALTY_CHARGE
@@ -356,4 +359,35 @@ enum TransactionType {
   ADMIN_DEBIT
   REFUND
   REFERRAL_CREDIT
+}
+
+enum MonthlyPaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+model MonthlyPayment {
+  id              String               @id @default(cuid())
+  customerId      String
+  year            Int
+  month           Int                  // 1-12
+  totalCostPaise  Int                  // dailyRate * daysInMonth (full month cost)
+  amountDuePaise  Int                  // totalCost - walletBalance at creation time
+  amountPaidPaise Int                  @default(0)
+  status          MonthlyPaymentStatus @default(PENDING)
+  dueDate         DateTime             @db.Date
+  paidAt          DateTime?
+  paymentOrderId  String?
+  isFirstMonth    Boolean              @default(false)
+  startDay        Int?                 // for first month: which day deliveries start
+  endDay          Int?                 // for first month: last day of month
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  Customer        Customer             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, year, month])
+  @@index([customerId])
+  @@index([status])
+  @@index([year, month])
 }

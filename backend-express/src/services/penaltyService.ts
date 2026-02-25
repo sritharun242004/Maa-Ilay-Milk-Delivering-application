@@ -77,7 +77,7 @@ async function checkCustomerPenalties(customerId: string, customerName: string):
   const fiveDaysAgo = new Date(now);
   fiveDaysAgo.setDate(fiveDaysAgo.getDate() - PENALTY_THRESHOLD_DAYS);
 
-  // Find bottles issued more than 5 days ago that haven't been penalized
+  // Find bottles issued more than 5 days ago that haven't been penalized or returned
   const overdueBottles = await prisma.bottleLedger.findMany({
     where: {
       customerId,
@@ -86,6 +86,7 @@ async function checkCustomerPenalties(customerId: string, customerName: string):
         lte: fiveDaysAgo,
       },
       penaltyAppliedAt: null,
+      returnedAt: null,
     },
     orderBy: { issuedDate: 'asc' },
   });
@@ -242,6 +243,7 @@ export async function getPenaltiesData() {
         { AND: [{ issuedDate: null }, { createdAt: { lte: thresholdDate } }] },
       ],
       penaltyAppliedAt: null,
+      returnedAt: null,
     },
     include: {
       Customer: {
@@ -391,6 +393,7 @@ export async function imposePenaltyOnCustomer(
             { AND: [{ issuedDate: null }, { createdAt: { lte: thresholdDate } }] },
           ],
           penaltyAppliedAt: null,
+          returnedAt: null,
         },
         orderBy: [{ issuedDate: 'asc' }, { createdAt: 'asc' }],
       }),

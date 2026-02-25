@@ -369,6 +369,13 @@ app.listen(PORT, () => {
 ║                                                   ║
 ╚═══════════════════════════════════════════════════╝
   `);
+
+  // Start scheduled jobs (penalty checks, monthly payment enforcement)
+  import('./services/scheduler').then(({ startAllSchedulers }) => {
+    startAllSchedulers();
+  }).catch(err => {
+    console.error('Failed to start schedulers:', err);
+  });
 });
 
 export default app;

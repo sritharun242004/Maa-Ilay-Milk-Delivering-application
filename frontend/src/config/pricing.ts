@@ -7,7 +7,7 @@
  * - 2.5L: ₹312/day
  *
  * Bottle deposit: ₹70 for 1L, ₹50 for 500ml (every 90 days)
- * Payment date: 5th of every month. Balance always shown in ₹.
+ * Payment due: 7th of every month (monthly upfront model)
  * Maximum quantity: 2.5L per day
  */
 export const PRICING = {
@@ -15,13 +15,25 @@ export const PRICING = {
   DAILY_500ML_RS: 72,
   DEPOSIT_1L_RS: 70,
   DEPOSIT_500ML_RS: 50,
-  /** Min balance for 3 days (below this → "About to expire") */
   MIN_BALANCE_3_DAYS_1L_RS: 360,
   MIN_BALANCE_1_DAY_1L_RS: 120,
   MIN_BALANCE_3_DAYS_500ML_RS: 216,
   MIN_BALANCE_1_DAY_500ML_RS: 72,
-  PAYMENT_DAY: 5,
+  PAYMENT_DAY: 7,
+  GRACE_PERIOD_END_DAY: 7,
 } as const;
+
+/** Get number of days in a month (1-indexed month) */
+export function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+/** Get month name */
+export function getMonthName(month: number): string {
+  const names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  return names[month] || '';
+}
 
 // Pricing map for each quantity
 export const DAILY_PRICE_MAP: Record<number, number> = {

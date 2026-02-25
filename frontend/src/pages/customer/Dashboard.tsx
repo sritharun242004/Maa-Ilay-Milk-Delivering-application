@@ -5,6 +5,7 @@ import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { formatDateLocal } from '../../lib/date';
 import { getApiUrl } from '../../config/api';
+import { getMonthName } from '../../config/pricing';
 import {
   Wallet,
   CheckCircle,
@@ -23,7 +24,7 @@ type DashboardData = {
   customer: {
     walletBalanceRs: string;
     name: string;
-    status: string; // PENDING_APPROVAL, ACTIVE, etc.
+    status: string;
   };
   subscription: {
     status: string;
@@ -37,6 +38,20 @@ type DashboardData = {
     days: number;
     description: string;
   } | null;
+  monthlyPayment: {
+    status: string;
+    totalCostPaise: number;
+    amountDuePaise: number;
+    amountPaidPaise: number;
+    dueDate: string;
+    paidAt: string | null;
+    year: number;
+    month: number;
+    isGracePeriod: boolean;
+    paymentRequired: boolean;
+  } | null;
+  paymentRequired: boolean;
+  isGracePeriod: boolean;
   nextDelivery: { deliveryDate: string } | null;
   balanceCoversDays?: number;
   pauseDaysUsed: number;
@@ -52,13 +67,12 @@ function formatDate(s: string): string {
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Tomorrow';
   if (diff === -1) return 'Yesterday';
-  // Always show date instead of day name
   return formatDateLocal(d, 'short');
 }
 
 function lastTopUp(recentTransactions: DashboardData['recentTransactions']): string {
-  const topUp = recentTransactions.find((t) => t.type === 'WALLET_TOPUP');
-  if (!topUp) return '—';
+  const topUp = recentTransactions.find((t) => t.type === 'WALLET_TOPUP' || t.type === 'MONTHLY_PAYMENT');
+  if (!topUp) return '--';
   const d = new Date(topUp.createdAt);
   const diff = Math.floor((Date.now() - d.getTime()) / (24 * 60 * 60 * 1000));
   if (diff === 0) return 'Today';
@@ -95,28 +109,26 @@ export const CustomerDashboard: React.FC = () => {
 
   const pauseDaysUsed = data?.pauseDaysUsed ?? 0;
 
-  // Subscription: 4 statuses based on customer status and subscription display
   const hasSubscription = !!data?.subscription;
   const customerStatus = data?.customer?.status;
-  const isPendingPayment = customerStatus === 'PENDING_PAYMENT'; // New user, hasn't subscribed
-  const isPendingApproval = customerStatus === 'PENDING_APPROVAL'; // Subscribed, waiting for admin
+  const isPendingPayment = customerStatus === 'PENDING_PAYMENT';
+  const isPendingApproval = customerStatus === 'PENDING_APPROVAL';
   const subDisplay = data?.subscription?.subscriptionStatusDisplay;
 
-  // Determine subscription label based on 4-status system
   const subscriptionLabel = isPendingPayment
     ? 'Pending'
     : isPendingApproval
     ? 'Waiting for Approval'
     : hasSubscription
-    ? (subDisplay === 'ACTIVE' ? 'Active' : subDisplay === 'PAUSED' ? 'Paused' : subDisplay === 'INACTIVE' ? 'Inactive' : data?.subscription?.status ?? '—')
+    ? (subDisplay === 'ACTIVE' ? 'Active' : subDisplay === 'PAUSED' ? 'Paused' : subDisplay === 'INACTIVE' ? 'Inactive' : data?.subscription?.status ?? '--')
     : 'No Subscription';
 
   const subscriptionBadge = isPendingPayment
-    ? undefined // Text "Pending" is clear enough
+    ? undefined
     : isPendingApproval
-    ? undefined // Text "Waiting for Approval" is clear enough
+    ? undefined
     : !hasSubscription
-    ? undefined // Text "No Subscription" is clear enough
+    ? undefined
     : subDisplay === 'INACTIVE'
     ? 'error'
     : subDisplay === 'PAUSED'
@@ -129,19 +141,26 @@ export const CustomerDashboard: React.FC = () => {
   const subscriptionSubtext = isPendingPayment
     ? 'Complete subscription'
     : isPendingApproval
-    ? undefined // No subtext - "Waiting for Approval" label is clear enough
+    ? undefined
     : !hasSubscription
     ? 'Start your subscription'
     : subDisplay === 'PAUSED'
     ? 'Delivery paused'
     : (subDisplay === 'ACTIVE' && balanceCoversDays === 1 ? '1 day grace period' : undefined);
 
+  // Monthly payment info
+  const mp = data?.monthlyPayment;
+  const monthName = mp ? getMonthName(mp.month) : '';
+  const paymentRequired = data?.paymentRequired ?? false;
+  const isMonthPaid = mp?.status === 'PAID';
+  const isOverdue = mp?.status === 'OVERDUE';
+
   const kpiData: { icon: any; label: string; value: string; badge?: string; subtext?: string; valueColor?: string }[] = [
     {
       icon: Wallet,
       label: 'Wallet Balance',
-      value: data ? `₹${Number(data.customer.walletBalanceRs).toLocaleString('en-IN')}` : '—',
-      subtext: data ? lastTopUp(data.recentTransactions) : '—',
+      value: data ? `₹${Number(data.customer.walletBalanceRs).toLocaleString('en-IN')}` : '--',
+      subtext: data ? lastTopUp(data.recentTransactions) : '--',
     },
     {
       icon: CheckCircle,
@@ -158,14 +177,14 @@ export const CustomerDashboard: React.FC = () => {
     {
       icon: Truck,
       label: 'Next Delivery',
-      value: data?.nextDelivery ? formatDate(data.nextDelivery.deliveryDate) : '—',
+      value: data?.nextDelivery ? formatDate(data.nextDelivery.deliveryDate) : '--',
       subtext: data?.nextDelivery
         ? '6:00 AM'
         : isPendingPayment
         ? 'Complete subscription first'
         : isPendingApproval
         ? 'Waiting for admin approval'
-        : '—',
+        : '--',
     },
     {
       icon: Calendar,
@@ -190,8 +209,8 @@ export const CustomerDashboard: React.FC = () => {
     },
     {
       icon: CreditCard,
-      title: 'Top-up Wallet',
-      description: 'Add money to your wallet',
+      title: 'Pay for Month',
+      description: 'Monthly subscription payment',
       path: '/customer/wallet',
     },
     {
@@ -236,6 +255,59 @@ export const CustomerDashboard: React.FC = () => {
           <p className="text-sm text-gray-500">Welcome back{data.customer?.name ? `, ${data.customer.name}` : ''}. Here's your milk subscription overview.</p>
         </div>
 
+        {/* Monthly Payment Banner */}
+        {hasSubscription && paymentRequired && !isOverdue && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-5 mb-6 flex gap-3">
+            <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                Pay your subscription for {monthName} {mp?.year}
+              </h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Monthly payment due by the 7th. Amount: ₹{mp ? (mp.amountDuePaise / 100).toFixed(2) : '0'}
+              </p>
+              <Link
+                to="/customer/wallet"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-800 hover:bg-green-900 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                Pay Now <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Overdue Payment Banner */}
+        {hasSubscription && isOverdue && (
+          <div className="bg-red-50 border border-red-300 rounded-lg p-5 mb-6 flex gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-red-900 mb-1">
+                Subscription overdue for {monthName} {mp?.year}
+              </h3>
+              <p className="text-sm text-red-800 mb-3">
+                Your deliveries are paused because payment is overdue. Please pay now to resume deliveries.
+              </p>
+              <Link
+                to="/customer/wallet"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                Pay Now <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Paid Confirmation */}
+        {hasSubscription && isMonthPaid && mp && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex gap-3">
+            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-green-900">
+              <strong>{monthName} {mp.year}</strong> subscription paid.
+              {mp.paidAt && ` Paid on ${formatDateLocal(mp.paidAt, 'short')}`}
+            </p>
+          </div>
+        )}
+
         {/* Pending Payment Notice */}
         {data.customer.status === 'PENDING_PAYMENT' && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-5 mb-6 flex gap-3">
@@ -243,7 +315,7 @@ export const CustomerDashboard: React.FC = () => {
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-gray-900 mb-1">Complete Your Subscription</h3>
               <p className="text-sm text-gray-600 mb-3">
-                Select your daily milk quantity and start receiving fresh milk at your doorstep every morning between 6-8 AM.
+                Select your daily milk quantity and pay to start receiving fresh milk at your doorstep every morning between 6-8 AM.
               </p>
               <Link
                 to="/customer/subscription"
@@ -281,7 +353,7 @@ export const CustomerDashboard: React.FC = () => {
               <li>Delivery between 6-8 AM daily</li>
               <li>Cutoff for changes: 4 PM previous day</li>
               <li>Pause delivery anytime from Calendar</li>
-              <li>Payment on the <strong>5th of every month</strong></li>
+              <li>Payment due by the <strong>7th of every month</strong></li>
             </ul>
           </div>
         </div>

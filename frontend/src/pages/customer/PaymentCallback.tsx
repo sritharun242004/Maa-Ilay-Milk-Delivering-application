@@ -7,24 +7,24 @@ import { CheckCircle, XCircle, Loader } from 'lucide-react';
 import { fetchWithCsrf } from '../../utils/csrf';
 
 type PaymentStatus = 'verifying' | 'success' | 'failed';
+type PaymentType = 'first_subscription' | 'monthly' | 'topup';
 
 export const PaymentCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState<PaymentStatus>('verifying');
+  const [paymentType, setPaymentType] = useState<PaymentType>('topup');
   const [message, setMessage] = useState('');
   const [amount, setAmount] = useState(0);
   const [walletBalance, setWalletBalance] = useState(0);
 
   useEffect(() => {
-    // Small delay to let cookies/session settle after external redirect from payment gateway
     const timer = setTimeout(() => verifyPayment(), 500);
     return () => clearTimeout(timer);
   }, []);
 
   const verifyPayment = async () => {
     try {
-      // Get order_id from URL query params
       const orderId = searchParams.get('order_id');
 
       if (!orderId) {
@@ -33,7 +33,6 @@ export const PaymentCallback: React.FC = () => {
         return;
       }
 
-      // Verify payment with backend
       const response = await fetchWithCsrf('/api/payment/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -46,7 +45,15 @@ export const PaymentCallback: React.FC = () => {
         setStatus('success');
         setAmount(data.amount || 0);
         setWalletBalance(data.walletBalance || 0);
-        setMessage(`₹${data.amount} has been successfully added to your wallet!`);
+        setPaymentType(data.paymentType || 'topup');
+
+        if (data.paymentType === 'first_subscription') {
+          setMessage('Your subscription has been created! Waiting for admin to assign a delivery person.');
+        } else if (data.paymentType === 'monthly') {
+          setMessage(`₹${data.amount} monthly payment completed successfully!`);
+        } else {
+          setMessage(`₹${data.amount} has been successfully added to your wallet!`);
+        }
       } else {
         setStatus('failed');
         setMessage(data.error || 'Payment verification failed. Please contact support if amount was deducted.');
@@ -73,28 +80,43 @@ export const PaymentCallback: React.FC = () => {
           {status === 'success' && (
             <>
               <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6" />
-              <h1 className="text-3xl font-bold text-gray-900 mb-4">Payment Successful!</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-4">
+                {paymentType === 'first_subscription'
+                  ? 'Subscription Created!'
+                  : paymentType === 'monthly'
+                  ? 'Monthly Payment Successful!'
+                  : 'Payment Successful!'}
+              </h1>
               <p className="text-lg text-gray-700 mb-6">{message}</p>
 
               <div className="bg-green-50 border-2 border-green-200 rounded-xl p-6 mb-8">
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Amount Added</p>
+                    <p className="text-sm text-gray-600 mb-1">Amount Paid</p>
                     <p className="text-2xl font-bold text-green-800">₹{amount.toFixed(2)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">New Balance</p>
+                    <p className="text-sm text-gray-600 mb-1">Wallet Balance</p>
                     <p className="text-2xl font-bold text-gray-900">₹{walletBalance.toFixed(2)}</p>
                   </div>
                 </div>
               </div>
 
+              {paymentType === 'first_subscription' && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-left">
+                  <p className="text-sm text-blue-900">
+                    <strong>What happens next?</strong> Our admin will review your subscription and assign a delivery person.
+                    You'll start receiving deliveries once approved.
+                  </p>
+                </div>
+              )}
+
               <div className="flex gap-4 justify-center">
-                <Button onClick={() => navigate('/customer/wallet')}>
-                  View Wallet
-                </Button>
-                <Button variant="secondary" onClick={() => navigate('/customer/dashboard')}>
+                <Button onClick={() => navigate('/customer/dashboard')}>
                   Go to Dashboard
+                </Button>
+                <Button variant="secondary" onClick={() => navigate('/customer/wallet')}>
+                  View Wallet
                 </Button>
               </div>
             </>
@@ -108,7 +130,7 @@ export const PaymentCallback: React.FC = () => {
 
               <div className="bg-red-50 border-2 border-red-200 rounded-xl p-6 mb-8">
                 <p className="text-sm text-red-800">
-                  If you have been charged but your wallet was not credited, please contact our support team
+                  If you have been charged but your payment was not processed, please contact our support team
                   with your order details.
                 </p>
               </div>

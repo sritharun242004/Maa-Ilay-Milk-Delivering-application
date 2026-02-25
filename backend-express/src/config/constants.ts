@@ -18,9 +18,15 @@ export const PAUSE_CUTOFF_HOUR = 16; // 4:00 PM
 
 /**
  * Payment day of the month
- * Subscriptions renew on this day every month
+ * Monthly subscription payment is due by this day
  */
-export const PAYMENT_DAY = 5; // 5th of every month
+export const PAYMENT_DAY = 7; // 7th of every month
+
+/**
+ * Grace period end day
+ * After this day, unpaid customers become INACTIVE
+ */
+export const GRACE_PERIOD_END_DAY = 7;
 
 /**
  * Grace period for negative wallet balance (in paise)

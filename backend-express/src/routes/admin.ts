@@ -761,6 +761,14 @@ router.get('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
     }
 
     const lastLedger = customer.BottleLedger[0];
+
+    // Get current month's payment status
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 1-indexed
+    const monthlyPayment = await prisma.monthlyPayment.findUnique({
+      where: { customerId_year_month: { customerId: id, year: currentYear, month: currentMonth } },
+    });
+
     res.json({
       customer: {
         id: customer.id,
@@ -802,6 +810,17 @@ router.get('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
           status: customer.Subscription.status,
           largeBottles: customer.Subscription.largeBotles,
           smallBottles: customer.Subscription.smallBottles,
+        }
+        : null,
+      monthlyPayment: monthlyPayment
+        ? {
+          year: monthlyPayment.year,
+          month: monthlyPayment.month,
+          totalCostRs: (monthlyPayment.totalCostPaise / 100).toFixed(2),
+          amountDueRs: (monthlyPayment.amountDuePaise / 100).toFixed(2),
+          amountPaidRs: (monthlyPayment.amountPaidPaise / 100).toFixed(2),
+          status: monthlyPayment.status,
+          paidAt: monthlyPayment.paidAt,
         }
         : null,
       bottleBalance: lastLedger
@@ -857,70 +876,22 @@ router.patch('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
           data.approvedAt = new Date();
           data.approvedBy = req.user?.id ?? null;
 
-          // Charge first bottle deposit
-          if (existing.Subscription && existing.Wallet) {
-            depositAmountPaise = await calculateBottleDepositPaise(existing.Subscription.dailyQuantityMl);
-
-            const currentBalance = existing.Wallet.balancePaise;
-            if (currentBalance < depositAmountPaise) {
-              return res.status(400).json(createErrorResponse(
-                ErrorCode.INSUFFICIENT_BALANCE,
-                `Insufficient wallet balance for bottle deposit. Required: ₹${depositAmountPaise / 100}, Available: ₹${currentBalance / 100}`,
-                {
-                  required: depositAmountPaise / 100,
-                  available: currentBalance / 100,
-                  shortfall: (depositAmountPaise - currentBalance) / 100
-                }
-              ));
-            }
-
-            // Deduct deposit from wallet in a transaction
-            await prisma.$transaction(async (tx) => {
-              const newBalance = currentBalance - depositAmountPaise;
-
-              // Update wallet balance
-              await tx.wallet.update({
-                where: { customerId: id },
-                data: { balancePaise: newBalance }
-              });
-
-              // Create transaction record
-              await tx.walletTransaction.create({
-                data: {
-                  walletId: existing.Wallet!.id,
-                  type: 'DEPOSIT_CHARGE',
-                  amountPaise: -depositAmountPaise,
-                  balanceAfterPaise: newBalance,
-                  description: `Bottle deposit charge for ${existing.Subscription!.dailyQuantityMl}ml subscription`,
-                  referenceType: 'deposit',
-                  performedByAdminId: req.user?.id
-                }
-              });
-
-              // Update subscription deposit tracking
-              await tx.subscription.update({
-                where: { customerId: id },
-                data: {
-                  lastDepositAtDelivery: 0,
-                  lastDepositChargedAt: new Date()
-                }
-              });
+          // Bottle deposit is now included in the first subscription payment
+          // No separate deposit charge needed during assignment
+          if (existing.Subscription) {
+            // Update subscription deposit tracking
+            await prisma.subscription.update({
+              where: { customerId: id },
+              data: {
+                lastDepositAtDelivery: 0,
+                lastDepositChargedAt: new Date()
+              }
             });
-
-            depositCharged = true;
-
-            // Check balance after deposit to set correct status (ACTIVE or INACTIVE)
-            const balanceAfterDeposit = currentBalance - depositAmountPaise;
-
-            if (balanceAfterDeposit >= 0) {
-              data.status = 'ACTIVE';
-            } else {
-              data.status = 'INACTIVE';
-            }
-          } else {
-            // No wallet or subscription, just set to ACTIVE (edge case)
-            data.status = 'ACTIVE';
           }
+
+          // Set status based on wallet balance
+          const currentBalance = existing.Wallet?.balancePaise ?? 0;
+          data.status = currentBalance >= 0 ? 'ACTIVE' : 'INACTIVE';
         }
 
         // Set delivery start date if provided

@@ -1,4 +1,6 @@
 import prisma from '../config/prisma';
+import { GRACE_PERIOD_END_DAY } from '../config/constants';
+import { getNowIST } from './dateUtils';
 
 /**
  * Automatically determines the correct customer status based on current conditions
@@ -6,12 +8,12 @@ import prisma from '../config/prisma';
  * Status Rules:
  * - VISITOR: No subscription yet
  * - PENDING_APPROVAL: Has subscription but no delivery person assigned
- * - ACTIVE: Has delivery person + sufficient wallet balance
- * - INACTIVE: Has delivery person but insufficient wallet balance
+ * - ACTIVE: Has delivery person + sufficient wallet balance + monthly payment OK
+ * - INACTIVE: Has delivery person but insufficient balance OR unpaid after grace period
  * - PAUSED: User manually paused (has any future pause dates)
  */
 export async function calculateCustomerStatus(customerId: string): Promise<'VISITOR' | 'PENDING_APPROVAL' | 'ACTIVE' | 'INACTIVE' | 'PAUSED'> {
-  const now = new Date();
+  const now = getNowIST();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
 
   const customer = await prisma.customer.findUnique({
@@ -21,7 +23,6 @@ export async function calculateCustomerStatus(customerId: string): Promise<'VISI
       Wallet: true,
       Pause: {
         where: {
-          // FIX: Check for any future pauses (today onwards)
           pauseDate: {
             gte: today
           }
@@ -45,15 +46,29 @@ export async function calculateCustomerStatus(customerId: string): Promise<'VISI
     return 'PENDING_APPROVAL';
   }
 
-  // FIX: PAUSED: Has any future pause dates (today or later)
+  // PAUSED: Has any future pause dates (today or later)
   if (customer.Pause && customer.Pause.length > 0) {
     return 'PAUSED';
+  }
+
+  // After grace period (8th+): check monthly payment
+  const currentDay = now.getDate();
+  if (currentDay > GRACE_PERIOD_END_DAY) {
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1; // 1-indexed
+
+    const monthlyPayment = await prisma.monthlyPayment.findUnique({
+      where: { customerId_year_month: { customerId, year, month } },
+    });
+
+    if (!monthlyPayment || monthlyPayment.status !== 'PAID') {
+      return 'INACTIVE';
+    }
   }
 
   // Check wallet balance for ACTIVE vs INACTIVE
   const walletBalance = customer.Wallet?.balancePaise ?? 0;
 
-  // Balance < 0 = INACTIVE (once negative, no more deliveries until top-up)
   if (walletBalance >= 0) {
     return 'ACTIVE';
   } else {
@@ -111,6 +126,22 @@ export async function canReceiveDelivery(customerId: string): Promise<boolean> {
 
   if (isPaused) {
     return false;
+  }
+
+  // After grace period: check monthly payment
+  const now = getNowIST();
+  const currentDay = now.getDate();
+  if (currentDay > GRACE_PERIOD_END_DAY) {
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+
+    const monthlyPayment = await prisma.monthlyPayment.findUnique({
+      where: { customerId_year_month: { customerId, year, month } },
+    });
+
+    if (!monthlyPayment || monthlyPayment.status !== 'PAID') {
+      return false;
+    }
   }
 
   // Check wallet balance — negative = can't receive delivery

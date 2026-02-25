@@ -22,6 +22,7 @@ import { deliveryActionLimiter } from '../middleware/rateLimiter';
 import { sanitizeDeliveryData } from '../utils/sanitize';
 import { ErrorCode, createErrorResponse, getErrorMessage } from '../utils/errorCodes';
 import { updateCustomerStatus } from '../utils/statusManager';
+import { GRACE_PERIOD_END_DAY } from '../config/constants';
 
 const router = Router();
 
@@ -62,7 +63,14 @@ export async function ensureTodayDeliveries(deliveryPersonId: string, start: Dat
   if (isCacheValid(cacheKey)) {
     return; // Already processed recently, skip
   }
-  const [eligibleCustomers, existingDeliveries, modificationsForToday] = await Promise.all([
+  // Check if we're past grace period — need to filter by monthly payment
+  const now = getNowIST();
+  const currentDay = now.getDate();
+  const isPastGracePeriod = currentDay > GRACE_PERIOD_END_DAY;
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1-indexed
+
+  const queries: Promise<any>[] = [
     prisma.customer.findMany({
       where: {
         deliveryPersonId,
@@ -79,12 +87,30 @@ export async function ensureTodayDeliveries(deliveryPersonId: string, start: Dat
     prisma.deliveryModification.findMany({
       where: { date: { gte: start, lte: end } },
     }),
-  ]);
+  ];
+
+  // Pre-fetch monthly payment records if past grace period
+  if (isPastGracePeriod) {
+    queries.push(
+      prisma.monthlyPayment.findMany({
+        where: { year: currentYear, month: currentMonth, status: 'PAID' },
+        select: { customerId: true },
+      })
+    );
+  }
+
+  const results = await Promise.all(queries);
+  const eligibleCustomers = results[0];
+  const existingDeliveries = results[1];
+  const modificationsForToday = results[2];
+  const paidCustomerIds = isPastGracePeriod
+    ? new Set((results[3] as any[]).map((p: any) => p.customerId))
+    : null;
 
   const existingSet = new Set(existingDeliveries.map((d: any) => d.customerId));
-  const modMap = new Map(modificationsForToday.map((m: any) => [m.customerId, m]));
+  const modMap = new Map<string, any>(modificationsForToday.map((m: any) => [m.customerId, m]));
 
-  const filtered = eligibleCustomers.filter((c) => {
+  const filtered = eligibleCustomers.filter((c: any) => {
     if (existingSet.has(c.id)) return false;
     const sub = c.Subscription;
     if (!sub) return false;
@@ -102,20 +128,23 @@ export async function ensureTodayDeliveries(deliveryPersonId: string, start: Dat
     const balance = c.Wallet?.balancePaise ?? 0;
     if (balance < 0) return false;
 
+    // After grace period: exclude customers without PAID MonthlyPayment
+    if (paidCustomerIds && !paidCustomerIds.has(c.id)) return false;
+
     return true;
   });
 
   // Pre-calculate prices for all needed quantities (async)
-  const quantitySet = new Set(filtered.map((c) => {
+  const quantitySet = new Set(filtered.map((c: any) => {
     const mod = modMap.get(c.id);
     return mod ? mod.quantityMl : c.Subscription!.dailyQuantityMl;
   }));
   const priceMap = new Map<number, number>();
   for (const qty of quantitySet) {
-    priceMap.set(qty, await calculateDailyPricePaise(qty));
+    priceMap.set(qty as number, await calculateDailyPricePaise(qty as number));
   }
 
-  const newDeliveries = filtered.map((c) => {
+  const newDeliveries = filtered.map((c: any) => {
     const sub = c.Subscription!;
     const mod = modMap.get(c.id);
 
@@ -928,6 +957,50 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
               description: newSmallCollected > 0 ? `Collected 500ml bottles` : `Correction: Reduced collected 500ml bottles`
             }
           });
+        }
+
+        // Mark oldest ISSUED entries as returned (FIFO) so penalty page updates correctly
+        if (newLargeCollected > 0) {
+          const unreturnedLarge = await tx.bottleLedger.findMany({
+            where: {
+              customerId,
+              action: 'ISSUED',
+              size: 'LARGE',
+              returnedAt: null,
+              penaltyAppliedAt: null,
+            },
+            orderBy: { issuedDate: 'asc' },
+          });
+          let remaining = newLargeCollected;
+          for (const entry of unreturnedLarge) {
+            if (remaining <= 0) break;
+            await tx.bottleLedger.update({
+              where: { id: entry.id },
+              data: { returnedAt: new Date() },
+            });
+            remaining -= entry.quantity;
+          }
+        }
+        if (newSmallCollected > 0) {
+          const unreturnedSmall = await tx.bottleLedger.findMany({
+            where: {
+              customerId,
+              action: 'ISSUED',
+              size: 'SMALL',
+              returnedAt: null,
+              penaltyAppliedAt: null,
+            },
+            orderBy: { issuedDate: 'asc' },
+          });
+          let remaining = newSmallCollected;
+          for (const entry of unreturnedSmall) {
+            if (remaining <= 0) break;
+            await tx.bottleLedger.update({
+              where: { id: entry.id },
+              data: { returnedAt: new Date() },
+            });
+            remaining -= entry.quantity;
+          }
         }
 
         // Update inventory: decrement inCirculation for collected bottles

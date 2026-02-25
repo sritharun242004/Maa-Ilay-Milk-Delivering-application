@@ -7,13 +7,16 @@ import {
   handleWebhookNotification,
 } from '../services/cashfree';
 import { csrfProtection } from '../middleware/csrf';
+import { calculateDailyPricePaise, calculateBottleDepositPaise } from '../config/pricing';
+import { daysInMonth, calculateFirstPayment, getOrCreateMonthlyPayment, isInGracePeriod } from '../utils/monthlyPaymentUtils';
+import { getNowIST } from '../utils/dateUtils';
 
 const router = Router();
 const prisma = new PrismaClient();
 
 /**
  * POST /api/payment/create-order
- * Create a new payment order for wallet top-up
+ * Create a new payment order for wallet top-up (legacy, kept for admin credits)
  */
 router.post('/create-order', csrfProtection, async (req: Request, res: Response) => {
   try {
@@ -77,6 +80,227 @@ router.post('/create-order', csrfProtection, async (req: Request, res: Response)
 });
 
 /**
+ * POST /api/payment/create-monthly-order
+ * Create a payment order for monthly subscription payment
+ */
+router.post('/create-monthly-order', csrfProtection, async (req: Request, res: Response) => {
+  try {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const user = req.user as any;
+    const customerId = user.id;
+
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+      include: { Subscription: true, Wallet: true },
+    });
+
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    if (!customer.Subscription) {
+      return res.status(400).json({ error: 'No active subscription found' });
+    }
+
+    const now = getNowIST();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1; // 1-indexed
+
+    // Get or create monthly payment record
+    const monthlyPayment = await getOrCreateMonthlyPayment(customerId, year, month);
+
+    // Already paid
+    if (monthlyPayment.status === 'PAID') {
+      return res.json({
+        success: true,
+        alreadyCovered: true,
+        message: 'Monthly payment already completed',
+        monthlyPayment: {
+          status: monthlyPayment.status,
+          totalCostPaise: monthlyPayment.totalCostPaise,
+          amountDuePaise: 0,
+          paidAt: monthlyPayment.paidAt,
+        },
+      });
+    }
+
+    // Calculate current amount due (wallet may have changed since record creation)
+    const walletBalance = customer.Wallet?.balancePaise ?? 0;
+    const amountDue = Math.max(0, monthlyPayment.totalCostPaise - walletBalance);
+
+    if (amountDue <= 0) {
+      // Wallet covers the full month — mark as paid
+      await prisma.monthlyPayment.update({
+        where: { id: monthlyPayment.id },
+        data: {
+          status: 'PAID',
+          amountDuePaise: 0,
+          amountPaidPaise: monthlyPayment.totalCostPaise,
+          paidAt: new Date(),
+        },
+      });
+
+      return res.json({
+        success: true,
+        alreadyCovered: true,
+        message: 'Month covered by wallet balance',
+        monthlyPayment: {
+          status: 'PAID',
+          totalCostPaise: monthlyPayment.totalCostPaise,
+          amountDuePaise: 0,
+        },
+      });
+    }
+
+    // Need Cashfree payment for the remaining amount
+    const result = await createCashfreeOrder({
+      customerId,
+      customerName: customer.name,
+      customerEmail: customer.email,
+      customerPhone: customer.phone,
+      amountPaise: amountDue,
+      purpose: `Monthly Subscription - ${getMonthName(month)} ${year}`,
+      monthlyPaymentId: monthlyPayment.id,
+    });
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error || 'Failed to create payment order' });
+    }
+
+    // Link the payment order to the monthly payment
+    await prisma.monthlyPayment.update({
+      where: { id: monthlyPayment.id },
+      data: { paymentOrderId: result.orderId },
+    });
+
+    res.json({
+      success: true,
+      alreadyCovered: false,
+      orderId: result.orderId,
+      paymentSessionId: result.paymentSessionId,
+      amountDuePaise: amountDue,
+      amount: amountDue / 100,
+      monthlyPayment: {
+        status: monthlyPayment.status,
+        totalCostPaise: monthlyPayment.totalCostPaise,
+        amountDuePaise: amountDue,
+      },
+    });
+  } catch (error: any) {
+    console.error('Create monthly payment order error:', error);
+    res.status(500).json({ error: 'Failed to create monthly payment order' });
+  }
+});
+
+/**
+ * POST /api/payment/create-first-payment
+ * Create payment order for first-time subscription (partial month + deposit)
+ */
+router.post('/create-first-payment', csrfProtection, async (req: Request, res: Response) => {
+  try {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const user = req.user as any;
+    const customerId = user.id;
+    const { dailyQuantityMl } = req.body;
+
+    if (!dailyQuantityMl || ![500, 1000, 1500, 2000, 2500].includes(dailyQuantityMl)) {
+      return res.status(400).json({ error: 'Invalid quantity. Must be 500, 1000, 1500, 2000, or 2500 ml.' });
+    }
+
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { name: true, email: true, phone: true, status: true },
+    });
+
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    // Must be VISITOR (not already subscribed)
+    if (customer.status !== 'VISITOR') {
+      return res.status(400).json({ error: 'Already subscribed. Use monthly payment instead.' });
+    }
+
+    const payment = await calculateFirstPayment(dailyQuantityMl);
+
+    if (payment.totalPaise <= 0) {
+      return res.status(400).json({ error: 'Invalid payment amount' });
+    }
+
+    // Create Cashfree order
+    const result = await createCashfreeOrder({
+      customerId,
+      customerName: customer.name,
+      customerEmail: customer.email,
+      customerPhone: customer.phone,
+      amountPaise: payment.totalPaise,
+      purpose: `First Subscription - ${dailyQuantityMl}ml (${payment.remainingDays} days + deposit)`,
+      isFirstPayment: true,
+      dailyQuantityMl,
+    });
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error || 'Failed to create payment order' });
+    }
+
+    res.json({
+      success: true,
+      orderId: result.orderId,
+      paymentSessionId: result.paymentSessionId,
+      amount: payment.totalPaise / 100,
+      breakdown: {
+        remainingDays: payment.remainingDays,
+        milkCostRs: payment.milkCostPaise / 100,
+        depositRs: payment.depositPaise / 100,
+        totalRs: payment.totalPaise / 100,
+        startDate: payment.startDate.toISOString().split('T')[0],
+      },
+    });
+  } catch (error: any) {
+    console.error('Create first payment order error:', error);
+    res.status(500).json({ error: 'Failed to create first payment order' });
+  }
+});
+
+/**
+ * GET /api/payment/first-payment-preview
+ * Preview the first-time subscription cost without creating an order
+ */
+router.get('/first-payment-preview', async (req: Request, res: Response) => {
+  try {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const dailyQuantityMl = Number(req.query.dailyQuantityMl);
+    if (!dailyQuantityMl || ![500, 1000, 1500, 2000, 2500].includes(dailyQuantityMl)) {
+      return res.status(400).json({ error: 'Invalid quantity' });
+    }
+
+    const payment = await calculateFirstPayment(dailyQuantityMl);
+    const dailyRatePaise = await calculateDailyPricePaise(dailyQuantityMl);
+
+    res.json({
+      dailyRateRs: dailyRatePaise / 100,
+      remainingDays: payment.remainingDays,
+      milkCostRs: payment.milkCostPaise / 100,
+      depositRs: payment.depositPaise / 100,
+      totalRs: payment.totalPaise / 100,
+      startDate: payment.startDate.toISOString().split('T')[0],
+    });
+  } catch (error: any) {
+    console.error('First payment preview error:', error);
+    res.status(500).json({ error: 'Failed to calculate first payment' });
+  }
+});
+
+/**
  * POST /api/payment/verify
  * Verify payment after user completes payment on Cashfree
  */
@@ -125,11 +349,16 @@ router.post('/verify', csrfProtection, async (req: Request, res: Response) => {
       select: { balancePaise: true },
     });
 
+    // Determine payment type from purpose
+    const isFirstPayment = paymentOrder.purpose.startsWith('First Subscription');
+    const isMonthlyPayment = paymentOrder.purpose.startsWith('Monthly Subscription');
+
     res.json({
       success: true,
       verified: result.verified,
       amount: result.amountPaise ? result.amountPaise / 100 : 0,
       walletBalance: wallet ? wallet.balancePaise / 100 : 0,
+      paymentType: isFirstPayment ? 'first_subscription' : isMonthlyPayment ? 'monthly' : 'topup',
     });
   } catch (error: any) {
     console.error('Verify payment error:', error);
@@ -249,5 +478,11 @@ router.get('/history', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to get payment history' });
   }
 });
+
+function getMonthName(month: number): string {
+  const names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  return names[month] || '';
+}
 
 export default router;
