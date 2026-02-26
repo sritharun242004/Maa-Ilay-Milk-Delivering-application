@@ -73,12 +73,22 @@ export const Wallet: React.FC = () => {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    Promise.all([fetchWallet(), fetchMonthlyStatus(), fetchNextMonthPreview()])
-      .finally(() => setLoading(false));
+    // Load wallet first (critical) — show page as soon as it resolves
+    fetchWallet().finally(() => setLoading(false));
+    // Load non-critical data in background (won't block page render)
+    fetchMonthlyStatus();
+    fetchNextMonthPreview();
   }, []);
 
+  const fetchWithTimeout = (url: string, timeoutMs = 10000) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    return fetch(url, { credentials: 'include', signal: controller.signal })
+      .finally(() => clearTimeout(timer));
+  };
+
   const fetchWallet = () => {
-    return fetch(getApiUrl('/api/customer/wallet'), { credentials: 'include' })
+    return fetchWithTimeout(getApiUrl('/api/customer/wallet'))
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load wallet');
         return res.json();
@@ -88,7 +98,7 @@ export const Wallet: React.FC = () => {
   };
 
   const fetchMonthlyStatus = () => {
-    return fetch(getApiUrl('/api/customer/monthly-payment-status'), { credentials: 'include' })
+    return fetchWithTimeout(getApiUrl('/api/customer/monthly-payment-status'))
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load monthly status');
         return res.json();
@@ -98,7 +108,7 @@ export const Wallet: React.FC = () => {
   };
 
   const fetchNextMonthPreview = () => {
-    return fetch(getApiUrl('/api/customer/next-month-preview'), { credentials: 'include' })
+    return fetchWithTimeout(getApiUrl('/api/customer/next-month-preview'))
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load preview');
         return res.json();

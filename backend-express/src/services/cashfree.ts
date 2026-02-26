@@ -1,9 +1,7 @@
 import { randomBytes } from 'crypto';
 import crypto from 'crypto';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/prisma';
 import axios from 'axios';
-
-const prisma = new PrismaClient();
 
 // Cashfree API Configuration
 const CASHFREE_API_VERSION = '2023-08-01';

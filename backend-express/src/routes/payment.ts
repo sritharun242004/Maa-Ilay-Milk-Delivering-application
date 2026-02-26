@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/prisma';
 import {
   createCashfreeOrder,
   verifyAndProcessPayment,
@@ -13,7 +13,6 @@ import { NEXT_MONTH_PREVIEW_DAYS } from '../config/constants';
 import { getNowIST } from '../utils/dateUtils';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 /**
  * POST /api/payment/create-order

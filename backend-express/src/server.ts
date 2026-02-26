@@ -135,8 +135,7 @@ app.use(requestContextLogger);
 import { PrismaSessionStore } from '@quixo3/prisma-session-store';
 import { PrismaClient } from '@prisma/client';
 import { Store } from 'express-session';
-
-const prisma = new PrismaClient();
+import prisma from './config/prisma';
 
 // In-memory cache layer for session store to avoid DB roundtrip on every request
 class CachedSessionStore extends Store {
