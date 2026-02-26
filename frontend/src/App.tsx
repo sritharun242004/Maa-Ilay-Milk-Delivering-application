@@ -39,7 +39,7 @@ const AdminTodayDeliveries = React.lazy(() => import('./pages/admin/TodayDeliver
 const BottlesOut = React.lazy(() => import('./pages/admin/BottlesOut').then(m => ({ default: m.BottlesOut })));
 const AdminDeliveries = React.lazy(() => import('./pages/admin/Deliveries').then(m => ({ default: m.AdminDeliveries })));
 const DeliveryTeam = React.lazy(() => import('./pages/admin/SimpleAdminPages').then(m => ({ default: m.DeliveryTeam })));
-const Inventory = React.lazy(() => import('./pages/admin/SimpleAdminPages').then(m => ({ default: m.Inventory })));
+const Inventory = React.lazy(() => import('./pages/admin/Inventory'));
 const AdminPayments = React.lazy(() => import('./pages/admin/Payments').then(m => ({ default: m.AdminPayments })));
 const Penalties = React.lazy(() => import('./pages/admin/SimpleAdminPages').then(m => ({ default: m.Penalties })));
 const Settings = React.lazy(() => import('./pages/admin/SimpleAdminPages').then(m => ({ default: m.Settings })));

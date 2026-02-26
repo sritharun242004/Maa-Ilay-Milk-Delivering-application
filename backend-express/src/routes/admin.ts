@@ -1733,8 +1733,24 @@ router.get('/inventory', isAuthenticated, isAdmin, async (req, res) => {
     const largeTotal = inv?.largeBottlesTotal ?? 300;
     const smallTotal = inv?.smallBottlesTotal ?? 200;
 
-    // Add cache headers - inventory changes less frequently
-    res.set('Cache-Control', 'private, max-age=300'); // 5 minutes cache
+    // Fetch recent logs (latest 20)
+    const recentLogs = await prisma.inventoryLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+    // Resolve admin names
+    const adminIds = [...new Set(recentLogs.map(l => l.performedByAdminId))];
+    const admins = adminIds.length > 0
+      ? await prisma.admin.findMany({ where: { id: { in: adminIds } }, select: { id: true, name: true } })
+      : [];
+    const adminMap = Object.fromEntries(admins.map(a => [a.id, a.name]));
+
+    const logsWithNames = recentLogs.map(l => ({
+      ...l,
+      adminName: adminMap[l.performedByAdminId] || 'Unknown',
+    }));
+
     res.json({
       totalBottles: largeTotal + smallTotal,
       largeTotal,
@@ -1745,6 +1761,7 @@ router.get('/inventory', isAuthenticated, isAdmin, async (req, res) => {
       inWarehouse: largeTotal + smallTotal - largeCirc - smallCirc,
       largeInWarehouse: largeTotal - largeCirc,
       smallInWarehouse: smallTotal - smallCirc,
+      recentLogs: logsWithNames,
     });
   } catch (e) {
     console.error('Admin inventory error:', e);
@@ -1753,6 +1770,180 @@ router.get('/inventory', isAuthenticated, isAdmin, async (req, res) => {
       'Failed to load inventory',
       { originalError: e instanceof Error ? e.message : String(e) }
     ));
+  }
+});
+
+router.get('/inventory/logs', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const action = req.query.action as string | undefined;
+
+    const where = action ? { action } : {};
+
+    const [logs, total] = await Promise.all([
+      prisma.inventoryLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.inventoryLog.count({ where }),
+    ]);
+
+    const adminIds = [...new Set(logs.map(l => l.performedByAdminId))];
+    const admins = adminIds.length > 0
+      ? await prisma.admin.findMany({ where: { id: { in: adminIds } }, select: { id: true, name: true } })
+      : [];
+    const adminMap = Object.fromEntries(admins.map(a => [a.id, a.name]));
+
+    res.json({
+      logs: logs.map(l => ({ ...l, adminName: adminMap[l.performedByAdminId] || 'Unknown' })),
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    });
+  } catch (e) {
+    console.error('Admin inventory logs error:', e);
+    res.status(500).json(createErrorResponse(ErrorCode.DATABASE_ERROR, 'Failed to load inventory logs'));
+  }
+});
+
+router.post('/inventory/add-batch', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    if (!req.user) return res.status(403).json({ error: 'Forbidden' });
+    const adminId = req.user.id;
+    const { largeBottles, smallBottles, notes } = req.body;
+    const large = parseInt(largeBottles) || 0;
+    const small = parseInt(smallBottles) || 0;
+
+    if (large < 0 || small < 0) {
+      return res.status(400).json({ error: 'Quantities must be non-negative' });
+    }
+    if (large === 0 && small === 0) {
+      return res.status(400).json({ error: 'At least one quantity must be greater than 0' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const inv = await tx.inventory.findFirst();
+      if (inv) {
+        await tx.inventory.update({
+          where: { id: inv.id },
+          data: {
+            largeBottlesTotal: { increment: large },
+            smallBottlesTotal: { increment: small },
+            updatedByAdminId: adminId,
+          },
+        });
+      } else {
+        await tx.inventory.create({
+          data: {
+            largeBottlesTotal: large,
+            smallBottlesTotal: small,
+            updatedByAdminId: adminId,
+          },
+        });
+      }
+
+      await tx.inventoryLog.create({
+        data: {
+          action: 'BATCH_ADDED',
+          largeBottlesDelta: large,
+          smallBottlesDelta: small,
+          reason: notes || 'New batch added',
+          performedByAdminId: adminId,
+        },
+      });
+    });
+
+    res.json({ success: true, message: 'Batch added successfully' });
+  } catch (e) {
+    console.error('Admin add batch error:', e);
+    res.status(500).json(createErrorResponse(ErrorCode.DATABASE_ERROR, 'Failed to add batch'));
+  }
+});
+
+router.post('/inventory/reduce-stock', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    if (!req.user) return res.status(403).json({ error: 'Forbidden' });
+    const adminId = req.user.id;
+    const { largeBottles, smallBottles, reason, action } = req.body;
+    const large = parseInt(largeBottles) || 0;
+    const small = parseInt(smallBottles) || 0;
+
+    if (!['BATCH_DISCARDED', 'BROKEN_REPORTED'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+    if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+      return res.status(400).json({ error: 'Reason is required' });
+    }
+    if (large < 0 || small < 0) {
+      return res.status(400).json({ error: 'Quantities must be non-negative' });
+    }
+    if (large === 0 && small === 0) {
+      return res.status(400).json({ error: 'At least one quantity must be greater than 0' });
+    }
+
+    // Calculate warehouse stock to validate
+    const customers = await prisma.customer.findMany({
+      where: { status: { in: ['ACTIVE', 'INACTIVE', 'PAUSED'] } },
+      include: {
+        BottleLedger: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { largeBottleBalanceAfter: true, smallBottleBalanceAfter: true },
+        },
+      },
+    });
+
+    let largeCirc = 0;
+    let smallCirc = 0;
+    for (const customer of customers) {
+      const latest = customer.BottleLedger[0];
+      if (latest) {
+        largeCirc += latest.largeBottleBalanceAfter;
+        smallCirc += latest.smallBottleBalanceAfter;
+      }
+    }
+
+    const inv = await prisma.inventory.findFirst();
+    const largeTotal = inv?.largeBottlesTotal ?? 0;
+    const smallTotal = inv?.smallBottlesTotal ?? 0;
+    const largeWarehouse = largeTotal - largeCirc;
+    const smallWarehouse = smallTotal - smallCirc;
+
+    if (large > largeWarehouse) {
+      return res.status(400).json({ error: `Cannot reduce more than warehouse stock (1L: ${largeWarehouse} available)` });
+    }
+    if (small > smallWarehouse) {
+      return res.status(400).json({ error: `Cannot reduce more than warehouse stock (500ml: ${smallWarehouse} available)` });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.inventory.update({
+        where: { id: inv!.id },
+        data: {
+          largeBottlesTotal: { decrement: large },
+          smallBottlesTotal: { decrement: small },
+          updatedByAdminId: adminId,
+        },
+      });
+
+      await tx.inventoryLog.create({
+        data: {
+          action,
+          largeBottlesDelta: -large,
+          smallBottlesDelta: -small,
+          reason: reason.trim(),
+          performedByAdminId: adminId,
+        },
+      });
+    });
+
+    res.json({ success: true, message: action === 'BATCH_DISCARDED' ? 'Batch discarded successfully' : 'Broken bottles reported successfully' });
+  } catch (e) {
+    console.error('Admin reduce stock error:', e);
+    res.status(500).json(createErrorResponse(ErrorCode.DATABASE_ERROR, 'Failed to reduce stock'));
   }
 });
 
