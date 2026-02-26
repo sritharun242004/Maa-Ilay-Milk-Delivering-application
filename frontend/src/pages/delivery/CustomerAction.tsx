@@ -31,6 +31,7 @@ interface DeliveryData {
   deliveryNotes: string | null;
   largeBottlesCollected: number;
   smallBottlesCollected: number;
+  deliveredAt: string | null;
 }
 
 interface ActionPageData {

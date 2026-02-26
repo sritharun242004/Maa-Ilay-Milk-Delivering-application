@@ -48,9 +48,21 @@ router.get('/google/callback',
 router.post('/admin/login',
   passport.authenticate('admin-local'),
   (req, res) => {
-    res.json({
-      success: true,
-      user: req.user,
+    // Regenerate session after login to prevent session fixation attacks
+    const user = req.user;
+    req.session.regenerate((err) => {
+      if (err) {
+        console.error('Session regeneration failed:', err);
+        return res.status(500).json({ error: 'Login failed' });
+      }
+      // Re-establish user on new session
+      req.logIn(user!, (loginErr) => {
+        if (loginErr) {
+          console.error('Re-login after session regeneration failed:', loginErr);
+          return res.status(500).json({ error: 'Login failed' });
+        }
+        res.json({ success: true, user: req.user });
+      });
     });
   }
 );
@@ -62,9 +74,20 @@ router.post('/admin/login',
 router.post('/delivery/login',
   passport.authenticate('delivery-local'),
   (req, res) => {
-    res.json({
-      success: true,
-      user: req.user,
+    // Regenerate session after login to prevent session fixation attacks
+    const user = req.user;
+    req.session.regenerate((err) => {
+      if (err) {
+        console.error('Session regeneration failed:', err);
+        return res.status(500).json({ error: 'Login failed' });
+      }
+      req.logIn(user!, (loginErr) => {
+        if (loginErr) {
+          console.error('Re-login after session regeneration failed:', loginErr);
+          return res.status(500).json({ error: 'Login failed' });
+        }
+        res.json({ success: true, user: req.user });
+      });
     });
   }
 );

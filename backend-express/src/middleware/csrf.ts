@@ -18,7 +18,11 @@ declare module 'express-session' {
  */
 
 const csrfConfig = doubleCsrf({
-  getSecret: () => process.env.CSRF_SECRET || 'your-csrf-secret-change-in-production',
+  getSecret: () => {
+    const secret = process.env.CSRF_SECRET;
+    if (!secret) throw new Error('CSRF_SECRET environment variable is required');
+    return secret;
+  },
   cookieName: 'maa-ilay.csrf', // Changed from __Host- to allow localhost
   cookieOptions: {
     httpOnly: true,

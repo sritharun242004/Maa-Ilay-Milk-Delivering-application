@@ -63,14 +63,12 @@ export async function ensureTodayDeliveries(deliveryPersonId: string, start: Dat
   if (isCacheValid(cacheKey)) {
     return; // Already processed recently, skip
   }
-  // Check if we're past grace period — need to filter by monthly payment
+  // Check if we're past grace period for wallet-based filtering
   const now = getNowIST();
   const currentDay = now.getDate();
   const isPastGracePeriod = currentDay > GRACE_PERIOD_END_DAY;
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1; // 1-indexed
 
-  const queries: Promise<any>[] = [
+  const [eligibleCustomers, existingDeliveries, modificationsForToday] = await Promise.all([
     prisma.customer.findMany({
       where: {
         deliveryPersonId,
@@ -87,52 +85,48 @@ export async function ensureTodayDeliveries(deliveryPersonId: string, start: Dat
     prisma.deliveryModification.findMany({
       where: { date: { gte: start, lte: end } },
     }),
-  ];
-
-  // Pre-fetch monthly payment records if past grace period
-  if (isPastGracePeriod) {
-    queries.push(
-      prisma.monthlyPayment.findMany({
-        where: { year: currentYear, month: currentMonth, status: 'PAID' },
-        select: { customerId: true },
-      })
-    );
-  }
-
-  const results = await Promise.all(queries);
-  const eligibleCustomers = results[0];
-  const existingDeliveries = results[1];
-  const modificationsForToday = results[2];
-  const paidCustomerIds = isPastGracePeriod
-    ? new Set((results[3] as any[]).map((p: any) => p.customerId))
-    : null;
+  ]);
 
   const existingSet = new Set(existingDeliveries.map((d: any) => d.customerId));
   const modMap = new Map<string, any>(modificationsForToday.map((m: any) => [m.customerId, m]));
 
-  const filtered = eligibleCustomers.filter((c: any) => {
-    if (existingSet.has(c.id)) return false;
+  // Pre-calculate daily prices for wallet check (only needed after grace period)
+  const dailyPriceCache = new Map<number, number>();
+  const getDailyPrice = async (quantityMl: number) => {
+    if (!dailyPriceCache.has(quantityMl)) {
+      dailyPriceCache.set(quantityMl, await calculateDailyPricePaise(quantityMl));
+    }
+    return dailyPriceCache.get(quantityMl)!;
+  };
+
+  // Filter eligible customers — need async for price lookup
+  const filterResults = await Promise.all(eligibleCustomers.map(async (c: any) => {
+    if (existingSet.has(c.id)) return null;
     const sub = c.Subscription;
-    if (!sub) return false;
+    if (!sub) return null;
 
     if (c.deliveryStartDate) {
       const customerStartDate = new Date(c.deliveryStartDate);
-      if (customerStartDate > start) return false;
+      if (customerStartDate > start) return null;
     }
 
     if (sub.startDate) {
       const subStartDate = new Date(sub.startDate);
-      if (subStartDate > start) return false;
+      if (subStartDate > start) return null;
     }
 
-    const balance = c.Wallet?.balancePaise ?? 0;
-    if (balance < 0) return false;
+    // During grace period (days 1-7): allow negative balance
+    // After grace period (8th+): wallet must cover at least 1 day's delivery
+    if (isPastGracePeriod) {
+      const balance = c.Wallet?.balancePaise ?? 0;
+      const dailyRate = await getDailyPrice(sub.dailyQuantityMl);
+      if (balance < dailyRate) return null;
+    }
 
-    // After grace period: exclude customers without PAID MonthlyPayment
-    if (paidCustomerIds && !paidCustomerIds.has(c.id)) return false;
+    return c;
+  }));
 
-    return true;
-  });
+  const filtered = filterResults.filter(Boolean);
 
   // Pre-calculate prices for all needed quantities (async)
   const quantitySet = new Set(filtered.map((c: any) => {
@@ -275,7 +269,7 @@ router.get('/assignees', isAuthenticated, isDelivery, async (req, res) => {
         displayStatus = 'Paused';
       } else if (c.status === 'PENDING_APPROVAL') {
         displayStatus = 'Pending';
-      } else if (c.status === 'INACTIVE' || (c.Wallet && c.Wallet.balancePaise < 0)) {
+      } else if (c.status === 'INACTIVE') {
         displayStatus = 'Inactive';
       } else if (c.Wallet && c.Subscription && c.status === 'ACTIVE') {
         displayStatus = 'Active';
@@ -433,10 +427,18 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
       // (customer may have gone INACTIVE after being charged)
       if (d.status !== 'SCHEDULED') return true;
 
-      // For SCHEDULED deliveries: customer must be ACTIVE with sufficient balance
+      // For SCHEDULED deliveries: customer must be ACTIVE
       if (c.status !== 'ACTIVE') return false;
+
+      // During grace period (days 1-7): allow SCHEDULED deliveries even with negative balance
+      const now = getNowIST();
+      const currentDay = now.getDate();
+      if (currentDay <= GRACE_PERIOD_END_DAY) return true;
+
+      // After grace period (8th+): wallet must cover at least 1 day's delivery
       const balance = c.Wallet?.balancePaise ?? 0;
-      return balance >= 0; // Negative balance = don't show
+      const dailyRate = c.Subscription?.dailyPricePaise ?? 0;
+      return balance >= dailyRate;
     });
 
     // Sort: Pending (SCHEDULED) first, then processed ones at bottom
@@ -614,6 +616,7 @@ router.get('/customer/:customerId', isAuthenticated, isDelivery, async (req, res
           deliveryNotes: delivery.deliveryNotes,
           largeBottlesCollected: delivery.largeBottlesCollected,
           smallBottlesCollected: delivery.smallBottlesCollected,
+          deliveredAt: delivery.deliveredAt,
         }
         : null,
       bottleBalance: {
@@ -744,7 +747,7 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
         data: updates,
       });
 
-      // A2. Increment delivery count and check for bottle deposit (every 90 deliveries)
+      // A2. Increment delivery count and check for bottle deposit (every 120 deliveries)
       if (body.status === 'DELIVERED' && delivery.status !== 'DELIVERED') {
         // FIX: Use SELECT FOR UPDATE to prevent race condition on concurrent deliveries
         const subscription = await tx.$queryRaw<Array<{

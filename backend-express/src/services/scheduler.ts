@@ -34,7 +34,7 @@ export function startPenaltyScheduler() {
 /**
  * Monthly payment scheduler
  * Runs daily at 12:05 AM IST
- * - On 1st of month: creates MonthlyPayment records for all active customers
+ * - Every day: creates MonthlyPayment records for customers missing one (catches mid-month approvals)
  * - On 8th+ of month: marks PENDING payments as OVERDUE, sets customers to INACTIVE
  */
 export function startMonthlyPaymentScheduler() {
@@ -47,9 +47,8 @@ export function startMonthlyPaymentScheduler() {
     console.log(`[Scheduler] Monthly payment check: Day ${currentDay} of ${year}-${String(month).padStart(2, '0')}`);
 
     try {
-      if (currentDay === 1) {
-        await createMonthlyPaymentRecords(year, month);
-      }
+      // Create records daily (not just 1st) to catch mid-month approvals and edge cases
+      await createMonthlyPaymentRecords(year, month);
 
       if (currentDay > GRACE_PERIOD_END_DAY) {
         await enforceOverduePayments(year, month);
@@ -130,39 +129,61 @@ async function createMonthlyPaymentRecords(year: number, month: number): Promise
 
 /**
  * Enforce overdue payments after grace period
- * Runs daily after the 7th: marks PENDING → OVERDUE, sets customers to INACTIVE
+ * Runs daily after the 7th:
+ * - Marks PENDING → OVERDUE (for tracking/reporting only)
+ * - Wallet sweep: finds ACTIVE customers with wallet < 1 day's delivery rate → sets INACTIVE
+ *
+ * MonthlyPayment status is for tracking only, NOT a gating mechanism.
+ * Delivery eligibility is determined by wallet balance.
  */
 async function enforceOverduePayments(year: number, month: number): Promise<void> {
   console.log(`[Scheduler] Enforcing overdue payments for ${year}-${String(month).padStart(2, '0')}...`);
 
-  // Find all PENDING payments for this month
+  // 1. Mark PENDING payments as OVERDUE (tracking only — does NOT affect delivery eligibility)
   const pendingPayments = await prisma.monthlyPayment.findMany({
     where: { year, month, status: 'PENDING' },
     select: { id: true, customerId: true },
   });
 
-  if (pendingPayments.length === 0) {
-    console.log('[Scheduler] No overdue payments to enforce');
-    return;
+  if (pendingPayments.length > 0) {
+    await prisma.monthlyPayment.updateMany({
+      where: { year, month, status: 'PENDING' },
+      data: { status: 'OVERDUE' },
+    });
+    console.log(`[Scheduler] Marked ${pendingPayments.length} payments as OVERDUE (tracking only)`);
+  } else {
+    console.log('[Scheduler] No overdue payments to mark');
   }
 
-  // Mark as OVERDUE
-  await prisma.monthlyPayment.updateMany({
-    where: { year, month, status: 'PENDING' },
-    data: { status: 'OVERDUE' },
-  });
-
-  // Set those customers to INACTIVE
-  const customerIds = pendingPayments.map(p => p.customerId);
-  await prisma.customer.updateMany({
+  // 2. Wallet sweep: find ACTIVE customers whose wallet can't cover 1 day's delivery → set INACTIVE
+  const activeCustomers = await prisma.customer.findMany({
     where: {
-      id: { in: customerIds },
-      status: { not: 'PENDING_APPROVAL' }, // Don't change customers awaiting approval
+      status: 'ACTIVE',
+      deliveryPersonId: { not: null },
+      Subscription: { status: 'ACTIVE' },
     },
-    data: { status: 'INACTIVE' },
+    include: { Subscription: true, Wallet: true },
   });
 
-  console.log(`[Scheduler] Marked ${pendingPayments.length} payments as OVERDUE, ${customerIds.length} customers set to INACTIVE`);
+  const insufficientIds: string[] = [];
+  for (const customer of activeCustomers) {
+    if (!customer.Subscription) continue;
+    const walletBalance = customer.Wallet?.balancePaise ?? 0;
+    const dailyRate = await calculateDailyPricePaise(customer.Subscription.dailyQuantityMl);
+    if (walletBalance < dailyRate) {
+      insufficientIds.push(customer.id);
+    }
+  }
+
+  if (insufficientIds.length > 0) {
+    await prisma.customer.updateMany({
+      where: { id: { in: insufficientIds } },
+      data: { status: 'INACTIVE' },
+    });
+    console.log(`[Scheduler] Wallet sweep: ${insufficientIds.length} customers set to INACTIVE (insufficient wallet balance)`);
+  } else {
+    console.log('[Scheduler] Wallet sweep: all active customers have sufficient balance');
+  }
 }
 
 /**

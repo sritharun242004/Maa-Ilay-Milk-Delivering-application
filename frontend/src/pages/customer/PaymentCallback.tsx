@@ -7,7 +7,7 @@ import { CheckCircle, XCircle, Loader } from 'lucide-react';
 import { fetchWithCsrf } from '../../utils/csrf';
 
 type PaymentStatus = 'verifying' | 'success' | 'failed';
-type PaymentType = 'first_subscription' | 'monthly' | 'topup';
+type PaymentType = 'first_subscription' | 'monthly' | 'advance_monthly' | 'topup';
 
 export const PaymentCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -51,6 +51,8 @@ export const PaymentCallback: React.FC = () => {
           setMessage('Your subscription has been created! Waiting for admin to assign a delivery person.');
         } else if (data.paymentType === 'monthly') {
           setMessage(`₹${data.amount} monthly payment completed successfully!`);
+        } else if (data.paymentType === 'advance_monthly') {
+          setMessage('Advance payment successful! Your wallet has been credited. Next month will be auto-paid on the 1st.');
         } else {
           setMessage(`₹${data.amount} has been successfully added to your wallet!`);
         }
@@ -85,6 +87,8 @@ export const PaymentCallback: React.FC = () => {
                   ? 'Subscription Created!'
                   : paymentType === 'monthly'
                   ? 'Monthly Payment Successful!'
+                  : paymentType === 'advance_monthly'
+                  ? 'Advance Payment Successful!'
                   : 'Payment Successful!'}
               </h1>
               <p className="text-lg text-gray-700 mb-6">{message}</p>

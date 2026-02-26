@@ -35,6 +35,7 @@ import {
   getOrCreateMonthlyPayment,
   daysInMonth as getDaysInMonth,
   isInGracePeriod,
+  calculateNextMonthPreview,
 } from '../utils/monthlyPaymentUtils';
 
 const router = Router();
@@ -42,8 +43,8 @@ const router = Router();
 /**
  * Subscription status for dashboard: ACTIVE, PAUSED, or INACTIVE
  * - PAUSED: User has manually paused deliveries
- * - INACTIVE: Insufficient wallet balance for next delivery
- * - ACTIVE: Has balance and not paused
+ * - INACTIVE: Insufficient wallet balance for next delivery (after grace period)
+ * - ACTIVE: Has balance or within grace period (days 1-7)
  */
 function subscriptionStatusDisplay(
   balanceRs: number,
@@ -51,6 +52,10 @@ function subscriptionStatusDisplay(
   isPaused: boolean
 ): 'ACTIVE' | 'INACTIVE' | 'PAUSED' {
   if (isPaused) return 'PAUSED';
+  // During grace period (days 1-7): always ACTIVE regardless of wallet balance
+  const now = getNowIST();
+  if (now.getDate() <= GRACE_PERIOD_END_DAY) return 'ACTIVE';
+  // After grace period: wallet must cover at least 1 day's delivery
   return balanceRs >= dailyRs ? 'ACTIVE' : 'INACTIVE';
 }
 
@@ -218,7 +223,7 @@ router.get('/dashboard', isAuthenticated, isCustomer, async (req, res) => {
     const sub = customer.Subscription;
     const pauseDaysUsed = sub?.pauseDaysUsedThisMonth ?? customer.Pause?.length ?? 0;
 
-    // Next payment: 5th of every month; amount = full month days × daily rate (Rs only)
+    // Next payment: 7th of every month; amount = full month days × daily rate (Rs only)
     const dailyQuantityMl = sub?.dailyQuantityMl ?? 1000;
     const { date: nextPaymentDateObj, year, month } = getNextPaymentDate(now);
     const daysInNextMonth = daysInMonth(year, month);
@@ -270,6 +275,9 @@ router.get('/dashboard', isAuthenticated, isCustomer, async (req, res) => {
     const monthlyPaymentData = await getMonthlyPaymentStatus(req.user.id);
     const paymentRequired = monthlyPaymentData ? monthlyPaymentData.paymentRequired : false;
     const isGracePeriodNow = isInGracePeriod();
+
+    // Get next month preview for advance payment
+    const nextMonthPreviewData = await calculateNextMonthPreview(req.user.id);
 
     // FIX: Use lowercase 'subscription' for frontend compatibility
     res.set('Cache-Control', 'private, max-age=15');
@@ -327,6 +335,14 @@ router.get('/dashboard', isAuthenticated, isCustomer, async (req, res) => {
       balanceCoversDays,
       pauseDaysUsed,
       recentTransactions: customer.Wallet?.WalletTransaction ?? [],
+      nextMonthPreview: nextMonthPreviewData.isPreviewAvailable ? {
+        isPreviewAvailable: true,
+        nextMonth: nextMonthPreviewData.nextMonth,
+        nextYear: nextMonthPreviewData.nextYear,
+        nextMonthName: nextMonthPreviewData.nextMonthName,
+        shortfallRs: (nextMonthPreviewData.shortfallPaise ?? 0) / 100,
+        walletCoversNextMonth: nextMonthPreviewData.walletCoversNextMonth,
+      } : null,
     });
   } catch (error) {
     console.error('Dashboard error:', error);
@@ -436,6 +452,40 @@ router.get('/monthly-payment-status', isAuthenticated, isCustomer, async (req, r
   } catch (e) {
     console.error('Monthly payment status error:', e);
     res.status(500).json({ error: 'Failed to load monthly payment status' });
+  }
+});
+
+// Get next month preview (advance payment info)
+router.get('/next-month-preview', isAuthenticated, isCustomer, async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    const preview = await calculateNextMonthPreview(req.user.id);
+    if (!preview.isPreviewAvailable) {
+      return res.json({ isPreviewAvailable: false });
+    }
+    res.json({
+      isPreviewAvailable: true,
+      nextMonth: preview.nextMonth,
+      nextYear: preview.nextYear,
+      nextMonthName: preview.nextMonthName,
+      dailyRateRs: (preview.dailyRatePaise ?? 0) / 100,
+      daysInNextMonth: preview.daysInNextMonth,
+      nextMonthCostRs: (preview.nextMonthCostPaise ?? 0) / 100,
+      currentBalanceRs: (preview.currentBalancePaise ?? 0) / 100,
+      remainingChargesRs: (preview.remainingChargesPaise ?? 0) / 100,
+      projectedBalanceRs: (preview.projectedBalancePaise ?? 0) / 100,
+      shortfallRs: (preview.shortfallPaise ?? 0) / 100,
+      shortfallPaise: preview.shortfallPaise ?? 0,
+      walletCoversNextMonth: preview.walletCoversNextMonth,
+      deliveryCount: preview.deliveryCount ?? 0,
+      deliveriesUntilNextDeposit: preview.deliveriesUntilNextDeposit ?? 0,
+      bottleDepositRs: (preview.bottleDepositPaise ?? 0) / 100,
+      depositsInNextMonth: preview.depositsInNextMonth ?? 0,
+      depositChargeRs: (preview.depositChargePaise ?? 0) / 100,
+    });
+  } catch (e) {
+    console.error('Next month preview error:', e);
+    res.status(500).json({ error: 'Failed to load next month preview' });
   }
 });
 
@@ -563,35 +613,36 @@ router.post('/change-plan', walletLimiter, isAuthenticated, isCustomer, async (r
           },
         });
       }
+    }
 
-      // Wallet covers the upgrade cost — deduct and update
-      const newBalance = walletBalance - costDiffPaise;
-      await prisma.$transaction([
-        prisma.wallet.update({
+    // All updates in single transaction to prevent partial state
+    const newDailyPricePaise = newDailyRate;
+    await prisma.$transaction(async (tx) => {
+      // 1. Wallet update (upgrade: deduct, downgrade: credit)
+      if (costDiffPaise > 0) {
+        const newBalance = walletBalance - costDiffPaise;
+        await tx.wallet.update({
           where: { customerId },
           data: { balancePaise: newBalance },
-        }),
-        prisma.walletTransaction.create({
+        });
+        await tx.walletTransaction.create({
           data: {
             walletId: customer.Wallet!.id,
-            type: 'MILK_CHARGE',
+            type: 'ADMIN_DEBIT',
             amountPaise: -costDiffPaise,
             balanceAfterPaise: newBalance,
             description: `Plan upgrade: ${oldQuantityMl}ml → ${newQuantityMl}ml (${remainingDays} days)`,
             referenceType: 'PLAN_CHANGE',
           },
-        }),
-      ]);
-    } else if (costDiffPaise < 0) {
-      // Downgrade: credit the difference back to wallet
-      const creditAmount = Math.abs(costDiffPaise);
-      const newBalance = walletBalance + creditAmount;
-      await prisma.$transaction([
-        prisma.wallet.update({
+        });
+      } else if (costDiffPaise < 0) {
+        const creditAmount = Math.abs(costDiffPaise);
+        const newBalance = walletBalance + creditAmount;
+        await tx.wallet.update({
           where: { customerId },
           data: { balancePaise: newBalance },
-        }),
-        prisma.walletTransaction.create({
+        });
+        await tx.walletTransaction.create({
           data: {
             walletId: customer.Wallet!.id,
             type: 'REFUND',
@@ -600,33 +651,32 @@ router.post('/change-plan', walletLimiter, isAuthenticated, isCustomer, async (r
             description: `Plan downgrade: ${oldQuantityMl}ml → ${newQuantityMl}ml (${remainingDays} days credit)`,
             referenceType: 'PLAN_CHANGE',
           },
-        }),
-      ]);
-    }
+        });
+      }
 
-    // Update subscription
-    const newDailyPricePaise = newDailyRate;
-    await prisma.subscription.update({
-      where: { customerId },
-      data: {
-        dailyQuantityMl: newQuantityMl,
-        dailyPricePaise: newDailyPricePaise,
-        largeBotles: Math.floor(newQuantityMl / 1000),
-        smallBottles: (newQuantityMl % 1000) >= 500 ? 1 : 0,
-      },
-    });
-
-    // Update the MonthlyPayment total cost for this month
-    const monthlyPayment = await prisma.monthlyPayment.findUnique({
-      where: { customerId_year_month: { customerId, year, month } },
-    });
-    if (monthlyPayment) {
-      const newTotalCost = newDailyRate * totalDays;
-      await prisma.monthlyPayment.update({
-        where: { id: monthlyPayment.id },
-        data: { totalCostPaise: newTotalCost },
+      // 2. Update subscription
+      await tx.subscription.update({
+        where: { customerId },
+        data: {
+          dailyQuantityMl: newQuantityMl,
+          dailyPricePaise: newDailyPricePaise,
+          largeBotles: Math.floor(newQuantityMl / 1000),
+          smallBottles: (newQuantityMl % 1000) >= 500 ? 1 : 0,
+        },
       });
-    }
+
+      // 3. Update the MonthlyPayment total cost for this month
+      const monthlyPayment = await tx.monthlyPayment.findUnique({
+        where: { customerId_year_month: { customerId, year, month } },
+      });
+      if (monthlyPayment) {
+        const newTotalCost = newDailyRate * totalDays;
+        await tx.monthlyPayment.update({
+          where: { id: monthlyPayment.id },
+          data: { totalCostPaise: newTotalCost },
+        });
+      }
+    });
 
     res.json({
       success: true,

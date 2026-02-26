@@ -40,7 +40,7 @@ export const Support: React.FC = () => {
     {
       question: 'How do bottle deposits work?',
       answer:
-        'A bottle deposit of ₹35 (1L) or ₹25 (500ml) is charged every 3 months. This is refundable when you return the bottles.',
+        'A bottle deposit is charged every 120 deliveries. The amount depends on your subscription plan. This is refundable when you return the bottles.',
     },
     {
       question: 'Can I change my daily quantity?',

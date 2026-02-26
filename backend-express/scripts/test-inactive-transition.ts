@@ -311,9 +311,9 @@ async function testDepositSkipLogic() {
   const { calculateBottleDepositPaise, shouldChargeDeposit } = await import('../src/config/pricing');
   const depositAmount = calculateBottleDepositPaise(1000); // ₹70 = 7000 paise
 
-  const newDeliveryCount = 90;
+  const newDeliveryCount = 120;
   const shouldDeposit = shouldChargeDeposit(newDeliveryCount, 0);
-  assert(shouldDeposit, `Delivery count 90 triggers deposit check`);
+  assert(shouldDeposit, `Delivery count 120 triggers deposit check`);
 
   // Test 7a: Deposit with ₹100 balance → ₹30 (still positive) → deposit GOES THROUGH
   const walletBalance7a = 10000; // ₹100
@@ -345,7 +345,7 @@ async function testDepositSkipLogic() {
           largeBotles: 1,
           smallBottles: 0,
           status: 'ACTIVE',
-          deliveryCount: 89,
+          deliveryCount: 119,
           lastDepositAtDelivery: 0,
         },
       },
@@ -365,12 +365,12 @@ async function testDepositSkipLogic() {
   });
 
   const updatedSub = await prisma.subscription.findUnique({ where: { customerId: customer.id } });
-  assert(updatedSub!.deliveryCount === 90, 'Delivery count incremented to 90');
+  assert(updatedSub!.deliveryCount === 120, 'Delivery count incremented to 120');
   assert(updatedSub!.lastDepositAtDelivery === 0, 'lastDepositAtDelivery stays at 0 (deposit skipped, will retry)');
 
-  // Next delivery (91) should also trigger deposit attempt since lastDepositAtDelivery is still 0
-  const shouldDepositNext = shouldChargeDeposit(91, 0);
-  assert(shouldDepositNext, 'Delivery 91 still triggers deposit (since it was skipped at 90)');
+  // Next delivery (121) should also trigger deposit attempt since lastDepositAtDelivery is still 0
+  const shouldDepositNext = shouldChargeDeposit(121, 0);
+  assert(shouldDepositNext, 'Delivery 121 still triggers deposit (since it was skipped at 120)');
 }
 
 // ── HTTP Integration Test ───────────────────────────────────────────────────

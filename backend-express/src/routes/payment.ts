@@ -8,7 +8,8 @@ import {
 } from '../services/cashfree';
 import { csrfProtection } from '../middleware/csrf';
 import { calculateDailyPricePaise, calculateBottleDepositPaise } from '../config/pricing';
-import { daysInMonth, calculateFirstPayment, getOrCreateMonthlyPayment, isInGracePeriod } from '../utils/monthlyPaymentUtils';
+import { daysInMonth, calculateFirstPayment, getOrCreateMonthlyPayment, isInGracePeriod, calculateNextMonthPreview } from '../utils/monthlyPaymentUtils';
+import { NEXT_MONTH_PREVIEW_DAYS } from '../config/constants';
 import { getNowIST } from '../utils/dateUtils';
 
 const router = Router();
@@ -301,6 +302,107 @@ router.get('/first-payment-preview', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/payment/create-advance-order
+ * Create a payment order for advance payment (wallet credit for next month)
+ */
+router.post('/create-advance-order', csrfProtection, async (req: Request, res: Response) => {
+  try {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const user = req.user as any;
+    const customerId = user.id;
+
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+      include: { Subscription: true, Wallet: true },
+    });
+
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    if (!customer.Subscription) {
+      return res.status(400).json({ error: 'No active subscription found' });
+    }
+
+    // Check current month is paid (block if OVERDUE)
+    const now = getNowIST();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+
+    const currentMonthPayment = await prisma.monthlyPayment.findUnique({
+      where: { customerId_year_month: { customerId, year: currentYear, month: currentMonth } },
+    });
+
+    if (currentMonthPayment && currentMonthPayment.status === 'OVERDUE') {
+      return res.status(400).json({
+        error: 'Current month payment is overdue. Please pay for this month first.',
+        code: 'CURRENT_MONTH_OVERDUE',
+      });
+    }
+
+    // Validate we're in the preview window
+    const totalDaysInMonth = daysInMonth(currentYear, currentMonth);
+    const currentDay = now.getDate();
+    if (currentDay <= totalDaysInMonth - NEXT_MONTH_PREVIEW_DAYS) {
+      return res.status(400).json({ error: 'Advance payment is only available in the last 3 days of the month.' });
+    }
+
+    // Calculate shortfall
+    const preview = await calculateNextMonthPreview(customerId);
+
+    if (!preview.isPreviewAvailable || !preview.shortfallPaise) {
+      return res.json({
+        success: true,
+        alreadyCovered: true,
+        message: 'Your wallet already covers next month.',
+      });
+    }
+
+    if (preview.shortfallPaise <= 0) {
+      return res.json({
+        success: true,
+        alreadyCovered: true,
+        message: 'Your wallet already covers next month.',
+      });
+    }
+
+    // Create Cashfree order for the shortfall (wallet credit, no MonthlyPayment record)
+    const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+    const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+
+    const result = await createCashfreeOrder({
+      customerId,
+      customerName: customer.name,
+      customerEmail: customer.email,
+      customerPhone: customer.phone,
+      amountPaise: preview.shortfallPaise,
+      purpose: `Advance payment for ${getMonthName(nextMonth)} ${nextYear}`,
+    });
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error || 'Failed to create payment order' });
+    }
+
+    res.json({
+      success: true,
+      alreadyCovered: false,
+      orderId: result.orderId,
+      paymentSessionId: result.paymentSessionId,
+      amountPaise: preview.shortfallPaise,
+      amount: preview.shortfallPaise / 100,
+      nextMonthName: getMonthName(nextMonth),
+      nextYear,
+    });
+  } catch (error: any) {
+    console.error('Create advance payment order error:', error);
+    res.status(500).json({ error: 'Failed to create advance payment order' });
+  }
+});
+
+/**
  * POST /api/payment/verify
  * Verify payment after user completes payment on Cashfree
  */
@@ -352,13 +454,14 @@ router.post('/verify', csrfProtection, async (req: Request, res: Response) => {
     // Determine payment type from purpose
     const isFirstPayment = paymentOrder.purpose.startsWith('First Subscription');
     const isMonthlyPayment = paymentOrder.purpose.startsWith('Monthly Subscription');
+    const isAdvancePayment = paymentOrder.purpose.startsWith('Advance payment');
 
     res.json({
       success: true,
       verified: result.verified,
       amount: result.amountPaise ? result.amountPaise / 100 : 0,
       walletBalance: wallet ? wallet.balancePaise / 100 : 0,
-      paymentType: isFirstPayment ? 'first_subscription' : isMonthlyPayment ? 'monthly' : 'topup',
+      paymentType: isFirstPayment ? 'first_subscription' : isMonthlyPayment ? 'monthly' : isAdvancePayment ? 'advance_monthly' : 'topup',
     });
   } catch (error: any) {
     console.error('Verify payment error:', error);

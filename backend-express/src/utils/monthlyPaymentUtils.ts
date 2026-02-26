@@ -1,6 +1,6 @@
 import prisma from '../config/prisma';
-import { calculateDailyPricePaise, calculateBottleDepositPaise } from '../config/pricing';
-import { GRACE_PERIOD_END_DAY } from '../config/constants';
+import { calculateDailyPricePaise, calculateBottleDepositPaise, shouldChargeDeposit, PRICING } from '../config/pricing';
+import { GRACE_PERIOD_END_DAY, NEXT_MONTH_PREVIEW_DAYS } from '../config/constants';
 import { getNowIST, getCurrentHourIST } from './dateUtils';
 import { PAUSE_CUTOFF_HOUR } from '../config/constants';
 
@@ -186,6 +186,166 @@ export async function getOrCreateMonthlyPayment(
   });
 
   return record;
+}
+
+/**
+ * Calculate how many bottle deposit charges will fire during a delivery window.
+ * Returns { depositCount, sinceLastDepositAfter } so we can chain windows.
+ *
+ * @param deliveriesInWindow  Number of actual deliveries in the window
+ * @param sinceLastDeposit    Deliveries since last deposit charge (0..119)
+ */
+function countDepositsInWindow(
+  deliveriesInWindow: number,
+  sinceLastDeposit: number
+): { depositCount: number; sinceLastDepositAfter: number } {
+  if (deliveriesInWindow <= 0) {
+    return { depositCount: 0, sinceLastDepositAfter: sinceLastDeposit };
+  }
+
+  const deliveriesToNextDeposit = PRICING.DEPOSIT_INTERVAL_DELIVERIES - sinceLastDeposit;
+
+  if (deliveriesInWindow < deliveriesToNextDeposit) {
+    // No deposit fires in this window
+    return { depositCount: 0, sinceLastDepositAfter: sinceLastDeposit + deliveriesInWindow };
+  }
+
+  // First deposit fires
+  const remaining = deliveriesInWindow - deliveriesToNextDeposit;
+  const additionalDeposits = Math.floor(remaining / PRICING.DEPOSIT_INTERVAL_DELIVERIES);
+  const leftover = remaining % PRICING.DEPOSIT_INTERVAL_DELIVERIES;
+
+  return {
+    depositCount: 1 + additionalDeposits,
+    sinceLastDepositAfter: leftover,
+  };
+}
+
+/**
+ * Calculate next month preview for advance payment
+ * Available during the last NEXT_MONTH_PREVIEW_DAYS days of the current month.
+ * Accounts for bottle deposit charges (every 120 deliveries) in both the
+ * remaining current-month window and the next-month window.
+ */
+export async function calculateNextMonthPreview(customerId: string): Promise<{
+  isPreviewAvailable: boolean;
+  nextMonth?: number;
+  nextYear?: number;
+  nextMonthName?: string;
+  dailyRatePaise?: number;
+  daysInNextMonth?: number;
+  nextMonthCostPaise?: number;
+  currentBalancePaise?: number;
+  remainingChargesPaise?: number;
+  projectedBalancePaise?: number;
+  shortfallPaise?: number;
+  walletCoversNextMonth?: boolean;
+  deliveryCount?: number;
+  deliveriesUntilNextDeposit?: number;
+  bottleDepositPaise?: number;
+  depositsInNextMonth?: number;
+  depositChargePaise?: number;
+}> {
+  const now = getNowIST();
+  const currentDay = now.getDate();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1-indexed
+  const totalDaysInCurrentMonth = daysInMonth(currentYear, currentMonth);
+
+  // Only available during last N days of the month
+  if (currentDay <= totalDaysInCurrentMonth - NEXT_MONTH_PREVIEW_DAYS) {
+    return { isPreviewAvailable: false };
+  }
+
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    include: { Subscription: true, Wallet: true },
+  });
+
+  if (!customer?.Subscription) {
+    return { isPreviewAvailable: false };
+  }
+
+  const sub = customer.Subscription;
+  const dailyRatePaise = await calculateDailyPricePaise(sub.dailyQuantityMl);
+  const currentBalancePaise = customer.Wallet?.balancePaise ?? 0;
+
+  // Calculate remaining delivery days this month (days after today)
+  const remainingDaysInMonth = totalDaysInCurrentMonth - currentDay;
+
+  // Get paused dates for remaining days
+  const remainingStart = new Date(currentYear, currentMonth - 1, currentDay + 1);
+  const monthEnd = new Date(currentYear, currentMonth - 1, totalDaysInCurrentMonth);
+  const pauses = await prisma.pause.findMany({
+    where: {
+      customerId,
+      pauseDate: { gte: remainingStart, lte: monthEnd },
+    },
+  });
+  const pausedDaysRemaining = pauses.length;
+  const remainingDeliveryDays = Math.max(0, remainingDaysInMonth - pausedDaysRemaining);
+  const remainingMilkChargesPaise = remainingDeliveryDays * dailyRatePaise;
+
+  // --- Bottle deposit projection ---
+  const deliveryCount = sub.deliveryCount;
+  const lastDepositAtDelivery = sub.lastDepositAtDelivery;
+  const sinceLastDeposit = deliveryCount - lastDepositAtDelivery; // 0..89
+  const bottleDepositPaise = await calculateBottleDepositPaise(sub.dailyQuantityMl);
+
+  // Deposits during remaining days of this month
+  const thisMonthDeposits = countDepositsInWindow(remainingDeliveryDays, sinceLastDeposit);
+  const depositsThisMonthRemaining = thisMonthDeposits.depositCount;
+  const depositChargeThisMonthPaise = depositsThisMonthRemaining * bottleDepositPaise;
+
+  // Total remaining charges this month (milk + deposits)
+  const remainingChargesPaise = remainingMilkChargesPaise + depositChargeThisMonthPaise;
+
+  // Project balance after this month's remaining charges
+  const projectedBalancePaise = currentBalancePaise - remainingChargesPaise;
+
+  // Next month calculation
+  const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+  const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+  const nextMonthDays = daysInMonth(nextYear, nextMonth);
+  const nextMonthMilkPaise = dailyRatePaise * nextMonthDays;
+
+  // Deposits during next month (assumes all days are delivery days — conservative estimate)
+  const nextMonthDeposits = countDepositsInWindow(nextMonthDays, thisMonthDeposits.sinceLastDepositAfter);
+  const depositsInNextMonth = nextMonthDeposits.depositCount;
+  const depositChargeNextMonthPaise = depositsInNextMonth * bottleDepositPaise;
+
+  // Total next month cost (milk + deposits)
+  const nextMonthCostPaise = nextMonthMilkPaise + depositChargeNextMonthPaise;
+
+  // Shortfall = how much more the customer needs to cover next month
+  const effectiveBalance = Math.max(0, projectedBalancePaise);
+  const shortfallPaise = Math.max(0, nextMonthCostPaise - effectiveBalance);
+
+  // Deliveries until next deposit (from current count)
+  const deliveriesUntilNextDeposit = PRICING.DEPOSIT_INTERVAL_DELIVERIES - sinceLastDeposit;
+
+  const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
+  return {
+    isPreviewAvailable: true,
+    nextMonth,
+    nextYear,
+    nextMonthName: monthNames[nextMonth],
+    dailyRatePaise,
+    daysInNextMonth: nextMonthDays,
+    nextMonthCostPaise,
+    currentBalancePaise,
+    remainingChargesPaise,
+    projectedBalancePaise,
+    shortfallPaise,
+    walletCoversNextMonth: shortfallPaise === 0,
+    deliveryCount,
+    deliveriesUntilNextDeposit,
+    bottleDepositPaise,
+    depositsInNextMonth,
+    depositChargePaise: depositChargeNextMonthPaise,
+  };
 }
 
 /**

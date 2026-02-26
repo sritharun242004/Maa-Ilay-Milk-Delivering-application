@@ -29,6 +29,13 @@ export const PAYMENT_DAY = 7; // 7th of every month
 export const GRACE_PERIOD_END_DAY = 7;
 
 /**
+ * Next month preview window (days before end of month)
+ * During the last N days of the month, show customers a preview
+ * of next month's cost and allow advance payment
+ */
+export const NEXT_MONTH_PREVIEW_DAYS = 3;
+
+/**
  * Grace period for negative wallet balance (in paise)
  * Customers can have negative balance up to this amount (1 day's charge)
  * This is calculated dynamically based on subscription price

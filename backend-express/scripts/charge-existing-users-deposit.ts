@@ -125,7 +125,7 @@ async function chargeExistingUsersDeposit() {
 
     console.log('\n✅ Done! All existing active users have been charged initial bottle deposit.');
     console.log('📌 Delivery count has been reset to 0 for all users.');
-    console.log('📌 Next deposit will be charged after 90 deliveries.');
+    console.log('📌 Next deposit will be charged after 120 deliveries.');
 
   } catch (error) {
     console.error('❌ Error:', error);

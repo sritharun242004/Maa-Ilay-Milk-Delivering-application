@@ -7,7 +7,7 @@
  * - 2L: ₹240/day
  * - 2.5L: ₹312/day
  *
- * Bottle deposit: ₹70 for 1L bottles, ₹50 for 500ml bottles (every 90 days)
+ * Bottle deposit: ₹70 for 1L bottles, ₹50 for 500ml bottles (every 120 deliveries)
  * Payment due: 7th of every month (monthly upfront model)
  * Allowed daily quantities: 500ml to 2.5L only
  * Bottle load: 1L bottles + 500ml bottles (e.g. 2.5L = 2×1L + 1×500ml)
@@ -51,6 +51,7 @@ export const PRICING = {
   DEPOSIT_1L_RS: 70,
   DEPOSIT_500ML_RS: 50,
   DEPOSIT_EVERY_CYCLES: 3,
+  DEPOSIT_INTERVAL_DELIVERIES: 120,
   PAYMENT_DAY: 7,
 } as const;
 
@@ -110,13 +111,13 @@ export async function calculateBottleDepositPaise(quantityMl: number): Promise<n
  * Check if deposit should be charged based on delivery count
  *
  * IMPORTANT: First deposit is charged when admin assigns delivery person (not on first delivery)
- * After that, charge every 90 actual deliveries (at 90, 180, 270, etc.)
+ * After that, charge every 120 actual deliveries (at 120, 240, 360, etc.)
  */
 export function shouldChargeDeposit(deliveryCount: number, lastDepositAtDelivery: number): boolean {
   if (deliveryCount === 1) {
     return false;
   }
-  if (deliveryCount > 0 && deliveryCount - lastDepositAtDelivery >= 90) {
+  if (deliveryCount > 0 && deliveryCount - lastDepositAtDelivery >= PRICING.DEPOSIT_INTERVAL_DELIVERIES) {
     return true;
   }
   return false;
@@ -124,12 +125,4 @@ export function shouldChargeDeposit(deliveryCount: number, lastDepositAtDelivery
 
 export function monthlyMilkChargePaise(dailyPaise: number, daysInMonth: number): number {
   return dailyPaise * daysInMonth;
-}
-
-export function firstMonthTotalPaise1L(daysInMonth: number): number {
-  return PRICING.DAILY_1L_PAISE * daysInMonth + PRICING.DEPOSIT_1L_PAISE;
-}
-
-export function firstMonthTotalPaise500ml(daysInMonth: number): number {
-  return PRICING.DAILY_500ML_PAISE * daysInMonth + PRICING.DEPOSIT_500ML_PAISE;
 }

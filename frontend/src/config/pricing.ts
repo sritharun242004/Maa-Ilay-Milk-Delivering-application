@@ -6,7 +6,7 @@
  * - 2L: ₹240/day
  * - 2.5L: ₹312/day
  *
- * Bottle deposit: ₹70 for 1L, ₹50 for 500ml (every 90 days)
+ * Bottle deposit: ₹70 for 1L, ₹50 for 500ml (every 120 deliveries)
  * Payment due: 7th of every month (monthly upfront model)
  * Maximum quantity: 2.5L per day
  */
@@ -21,6 +21,7 @@ export const PRICING = {
   MIN_BALANCE_1_DAY_500ML_RS: 72,
   PAYMENT_DAY: 7,
   GRACE_PERIOD_END_DAY: 7,
+  NEXT_MONTH_PREVIEW_DAYS: 3,
 } as const;
 
 /** Get number of days in a month (1-indexed month) */
@@ -62,7 +63,7 @@ export const PLANS = [
     bottles: 2,
     firstMonthRs: (days: number) => days * PRICING.DAILY_1L_RS + PRICING.DEPOSIT_1L_RS,
     renewalMonthRs: (days: number) => days * PRICING.DAILY_1L_RS,
-    depositEveryMonths: 3,
+    depositEveryDeliveries: 120, // Every 120 actual deliveries
   },
   {
     id: '500ml',
@@ -72,6 +73,6 @@ export const PLANS = [
     bottles: 2,
     firstMonthRs: (days: number) => days * PRICING.DAILY_500ML_RS + PRICING.DEPOSIT_500ML_RS,
     renewalMonthRs: (days: number) => days * PRICING.DAILY_500ML_RS,
-    depositEveryMonths: 3,
+    depositEveryDeliveries: 120, // Every 120 actual deliveries
   },
 ] as const;

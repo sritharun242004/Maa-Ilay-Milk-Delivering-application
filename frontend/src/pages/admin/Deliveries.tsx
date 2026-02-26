@@ -3,10 +3,11 @@ import { AdminLayout } from '../../components/layouts/AdminLayout';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { getApiUrl } from '../../config/api';
-import { Search, ChevronLeft, ChevronRight, RefreshCw, Filter, Download } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, RefreshCw, Filter, Download, FileDown } from 'lucide-react';
 
 type DeliveryRow = {
   id: string;
+  customerId: string;
   date: string;
   customerName: string;
   customerPhone: string;
@@ -77,6 +78,7 @@ export const AdminDeliveries: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
+  const [exportingCustomerId, setExportingCustomerId] = useState<string | null>(null);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -127,6 +129,35 @@ export const AdminDeliveries: React.FC = () => {
     setPage(1);
   };
 
+  const exportCustomer = (customerId: string, customerName: string) => {
+    setExportingCustomerId(customerId);
+    const params = new URLSearchParams();
+    if (useRange) {
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
+    } else {
+      params.set('date', date);
+    }
+    if (deliveryPersonId) params.set('deliveryPersonId', deliveryPersonId);
+    if (status !== 'ALL') params.set('status', status);
+    params.set('customerId', customerId);
+    fetch(getApiUrl(`/api/admin/deliveries-export?${params.toString()}`), { credentials: 'include' })
+      .then((res) => {
+        if (!res.ok) throw new Error('Export failed');
+        return res.blob();
+      })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `deliveries-${customerName.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch(() => alert('Failed to export deliveries'))
+      .finally(() => setExportingCustomerId(null));
+  };
+
   // Summary stats
   const deliveredCount = data?.deliveries.filter(d => d.status === 'DELIVERED').length ?? 0;
 
@@ -153,6 +184,7 @@ export const AdminDeliveries: React.FC = () => {
                 }
                 if (deliveryPersonId) params.set('deliveryPersonId', deliveryPersonId);
                 if (status !== 'ALL') params.set('status', status);
+                if (search) params.set('search', search);
                 fetch(getApiUrl(`/api/admin/deliveries-export?${params.toString()}`), { credentials: 'include' })
                   .then((res) => {
                     if (!res.ok) throw new Error('Export failed');
@@ -206,7 +238,7 @@ export const AdminDeliveries: React.FC = () => {
               Date Range
             </label>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${useRange ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3`}>
             {!useRange ? (
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Date</label>
@@ -266,30 +298,29 @@ export const AdminDeliveries: React.FC = () => {
                 <option value="SCHEDULED">Scheduled</option>
                 <option value="NOT_DELIVERED">Not Delivered</option>
                 <option value="PAUSED">Paused</option>
+                <option value="BLOCKED">Blocked</option>
               </select>
             </div>
 
-            {!useRange && (
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Search Customer</label>
-                <div className="flex gap-1">
-                  <input
-                    type="text"
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                    placeholder="Customer name..."
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-green-800 focus:ring-1 focus:ring-green-800/20 outline-none"
-                  />
-                  <button
-                    onClick={handleSearch}
-                    className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                  >
-                    <Search className="w-4 h-4 text-gray-600" />
-                  </button>
-                </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Search Customer</label>
+              <div className="flex gap-1">
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  placeholder="Customer name..."
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-green-800 focus:ring-1 focus:ring-green-800/20 outline-none"
+                />
+                <button
+                  onClick={handleSearch}
+                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  <Search className="w-4 h-4 text-gray-600" />
+                </button>
               </div>
-            )}
+            </div>
           </div>
         </Card>
 
@@ -339,13 +370,14 @@ export const AdminDeliveries: React.FC = () => {
                   <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Collected</th>
                   <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Status</th>
                   <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Time</th>
+                  <th className="w-10 py-3 px-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   Array.from({ length: 10 }).map((_, i) => (
                     <tr key={i} className="border-b border-gray-100">
-                      {Array.from({ length: 8 }).map((_, j) => (
+                      {Array.from({ length: 9 }).map((_, j) => (
                         <td key={j} className="py-4 px-4">
                           <div className="h-4 bg-gray-200 rounded animate-pulse" style={{ width: `${60 + Math.random() * 40}%` }} />
                         </td>
@@ -387,12 +419,22 @@ export const AdminDeliveries: React.FC = () => {
                         <td className="py-3 px-4 text-center text-xs text-gray-500">
                           {formatTime(d.deliveredAt)}
                         </td>
+                        <td className="py-3 px-2 text-center">
+                          <button
+                            onClick={() => exportCustomer(d.customerId, d.customerName)}
+                            disabled={exportingCustomerId === d.customerId}
+                            className="p-1.5 text-gray-400 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
+                            title={`Export ${d.customerName}'s deliveries`}
+                          >
+                            <FileDown className={`w-4 h-4 ${exportingCustomerId === d.customerId ? 'animate-pulse' : ''}`} />
+                          </button>
+                        </td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-gray-500">
+                    <td colSpan={9} className="py-12 text-center text-gray-500">
                       No deliveries found for the selected filters
                     </td>
                   </tr>

@@ -3,11 +3,11 @@ import bcrypt from 'bcryptjs';
 import { isAuthenticated, isAdmin } from '../middleware/auth';
 import prisma from '../config/prisma';
 import { passwordResetLimiter } from '../middleware/rateLimiter';
-import { calculateDailyPricePaise, calculateBottleDepositPaise } from '../config/pricing';
+import { calculateDailyPricePaise, calculateBottleDepositPaise, shouldChargeDeposit } from '../config/pricing';
 import { loadPricing } from '../config/pricingLoader';
 import { ensureTodayDeliveries } from './delivery';
 import { sanitizeName, sanitizePhone } from '../utils/sanitize';
-import { PAGINATION, VALIDATION } from '../config/constants';
+import { PAGINATION, VALIDATION, GRACE_PERIOD_END_DAY } from '../config/constants';
 import { toISTDateString, getDateRangeForDateColumn, addDaysIST } from '../utils/dateUtils';
 import { ErrorCode, createErrorResponse, getErrorMessage } from '../utils/errorCodes';
 import {
@@ -19,6 +19,7 @@ import {
 } from '../utils/auditLog';
 import { MemoryCache } from '../lib/cache';
 import { getPenaltiesData, imposePenaltyOnCustomer } from '../services/penaltyService';
+import { updateCustomerStatus } from '../utils/statusManager';
 
 const dashboardCache = new MemoryCache();
 const penaltiesCache = new MemoryCache();
@@ -324,6 +325,7 @@ router.get('/deliveries-history', isAuthenticated, isAdmin, async (req, res) => 
 
     const formatted = deliveries.map(d => ({
       id: d.id,
+      customerId: d.customerId,
       date: d.deliveryDate,
       customerName: d.Customer.name,
       customerPhone: d.Customer.phone,
@@ -363,6 +365,8 @@ router.get('/deliveries-export', isAuthenticated, isAdmin, async (req, res) => {
     const dateTo = req.query.dateTo as string;
     const deliveryPersonId = req.query.deliveryPersonId as string;
     const status = req.query.status as string;
+    const customerId = req.query.customerId as string;
+    const search = req.query.search as string;
 
     const where: any = {};
 
@@ -387,6 +391,12 @@ router.get('/deliveries-export', isAuthenticated, isAdmin, async (req, res) => {
 
     if (deliveryPersonId) where.deliveryPersonId = deliveryPersonId;
     if (status && status !== 'ALL') where.status = status;
+    if (customerId) where.customerId = customerId;
+    if (search) {
+      where.Customer = {
+        name: { contains: search, mode: 'insensitive' },
+      };
+    }
 
     const deliveries = await prisma.delivery.findMany({
       where,
@@ -398,7 +408,9 @@ router.get('/deliveries-export', isAuthenticated, isAdmin, async (req, res) => {
     });
 
     const todayStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-    const title = `"Maa Ilay Deliveries - ${todayStr}"`;
+    const customerName = deliveries.length > 0 && customerId ? deliveries[0].Customer.name : '';
+    const titleLabel = customerName ? `Maa Ilay Deliveries - ${customerName} - ${todayStr}` : `Maa Ilay Deliveries - ${todayStr}`;
+    const title = `"${titleLabel}"`;
     const header = 'S.No,Date,Customer,Phone,Quantity,Bottles,Delivered By,Status,Time';
     const csvRows = deliveries.map((d, i) => {
       const dateVal = new Date(d.deliveryDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -424,8 +436,11 @@ router.get('/deliveries-export', isAuthenticated, isAdmin, async (req, res) => {
     });
 
     const csv = [title, header, ...csvRows].join('\n');
+    const filename = customerId && customerName
+      ? `deliveries-${customerName.replace(/[^a-zA-Z0-9]/g, '_')}.csv`
+      : 'deliveries.csv';
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename=deliveries.csv');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
     res.send(csv);
   } catch (e) {
     console.error('Admin deliveries export error:', e);
@@ -810,6 +825,8 @@ router.get('/customers/:id', isAuthenticated, isAdmin, async (req, res) => {
           status: customer.Subscription.status,
           largeBottles: customer.Subscription.largeBotles,
           smallBottles: customer.Subscription.smallBottles,
+          deliveryCount: customer.Subscription.deliveryCount,
+          lastDepositAtDelivery: customer.Subscription.lastDepositAtDelivery,
         }
         : null,
       monthlyPayment: monthlyPayment
@@ -1066,9 +1083,15 @@ router.get('/delivery-team', isAuthenticated, isAdmin, async (req, res) => {
           // If already completed/not delivered, always count it
           if (d.status !== 'SCHEDULED') return true;
 
-          // Wallet check for SCHEDULED deliveries — negative = skip
+          // During grace period (days 1-7): allow SCHEDULED deliveries even with negative balance
+          const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+          const currentDay = now.getDate();
+          if (currentDay <= GRACE_PERIOD_END_DAY) return true;
+
+          // After grace period (8th+): wallet must cover at least 1 day's delivery
           const balance = c.Wallet?.balancePaise ?? 0;
-          return balance >= 0;
+          const dailyRate = c.Subscription?.dailyPricePaise ?? 0;
+          return balance >= dailyRate;
         });
 
         return { id: s.id, load: visibleDeliveries.length };
@@ -1268,13 +1291,14 @@ router.get('/customers/:id/delivery/:date', isAuthenticated, isAdmin, async (req
 
     res.json({
       delivery: {
+        id: delivery.id,
         date: dateStr,
         customerName: delivery.Customer.name,
         deliveryPersonName: delivery.DeliveryPerson?.name || 'Unassigned',
         quantityMl: delivery.quantityMl,
         liters: delivery.quantityMl / 1000,
-        largeBottles: Math.floor(delivery.quantityMl / 1000),
-        smallBottles: (delivery.quantityMl % 1000) >= 500 ? 1 : 0,
+        largeBottles: delivery.largeBottles,
+        smallBottles: delivery.smallBottles,
         status: delivery.status,
         chargePaise: delivery.chargePaise,
         chargeRs: (delivery.chargePaise / 100).toFixed(2),
@@ -1286,6 +1310,393 @@ router.get('/customers/:id/delivery/:date', isAuthenticated, isAdmin, async (req
   } catch (e) {
     console.error('Admin delivery detail error:', e);
     res.status(500).json({ error: 'Failed to fetch delivery details' });
+  }
+});
+
+// Admin update delivery — mark delivered/not-delivered, update bottle collection (same logic as delivery person)
+router.patch('/deliveries/:deliveryId/update', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const deliveryId = req.params.deliveryId;
+    const { status: newStatus, largeBottlesCollected, smallBottlesCollected } = req.body;
+
+    const delivery = await prisma.delivery.findUnique({
+      where: { id: deliveryId },
+      include: {
+        Customer: { include: { Wallet: true, Subscription: true } },
+      },
+    });
+    if (!delivery) return res.status(404).json({ error: 'Delivery not found' });
+
+    const customerId = delivery.customerId;
+    const updates: any = {};
+
+    // Determine what operations are needed
+    const statusChanging = newStatus && newStatus !== delivery.status;
+    const shouldChargeWallet = statusChanging &&
+      (newStatus === 'DELIVERED' || newStatus === 'NOT_DELIVERED') &&
+      delivery.status === 'SCHEDULED';
+    const shouldIssueBottles = statusChanging && newStatus === 'DELIVERED' && delivery.status !== 'DELIVERED';
+
+    if (statusChanging) {
+      updates.status = newStatus;
+      updates.deliveredAt = newStatus === 'DELIVERED' ? new Date() : null;
+    }
+    if (typeof largeBottlesCollected === 'number') updates.largeBottlesCollected = largeBottlesCollected;
+    if (typeof smallBottlesCollected === 'number') updates.smallBottlesCollected = smallBottlesCollected;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No updates provided' });
+    }
+
+    // Recalculate charge from current pricing
+    const currentChargePaise = shouldChargeWallet
+      ? await calculateDailyPricePaise(delivery.quantityMl)
+      : delivery.chargePaise || 0;
+    if (shouldChargeWallet && currentChargePaise !== delivery.chargePaise) {
+      updates.chargePaise = currentChargePaise;
+    }
+
+    const inventory = await prisma.inventory.findFirst();
+    let warning: string | undefined;
+
+    await prisma.$transaction(async (tx) => {
+      // Get bottle balance with lock
+      const initialLedger = await tx.$queryRaw<Array<{largeBottleBalanceAfter: number, smallBottleBalanceAfter: number}>>`
+        SELECT "largeBottleBalanceAfter", "smallBottleBalanceAfter"
+        FROM "BottleLedger"
+        WHERE "customerId" = ${customerId}
+        ORDER BY "createdAt" DESC
+        LIMIT 1
+        FOR UPDATE
+      `;
+      let currentLarge = initialLedger[0]?.largeBottleBalanceAfter ?? 0;
+      let currentSmall = initialLedger[0]?.smallBottleBalanceAfter ?? 0;
+
+      // A. Update delivery record
+      await tx.delivery.update({ where: { id: deliveryId }, data: updates });
+
+      // Track running wallet balance through transaction to avoid stale reads
+      let runningBalance = delivery.Customer.Wallet?.balancePaise ?? 0;
+
+      // B. Deposit charge every 120 deliveries (on first DELIVERED)
+      if (newStatus === 'DELIVERED' && delivery.status !== 'DELIVERED') {
+        const subscription = await tx.$queryRaw<Array<{
+          id: string; dailyQuantityMl: number; deliveryCount: number; lastDepositAtDelivery: number;
+        }>>`
+          SELECT id, "dailyQuantityMl", "deliveryCount", "lastDepositAtDelivery"
+          FROM "Subscription"
+          WHERE "customerId" = ${customerId}
+          FOR UPDATE
+        `.then(rows => rows[0]);
+
+        if (subscription) {
+          const newDeliveryCount = subscription.deliveryCount + 1;
+          if (shouldChargeDeposit(newDeliveryCount, subscription.lastDepositAtDelivery)) {
+            const depositAmount = await calculateBottleDepositPaise(subscription.dailyQuantityMl);
+            const wallet = delivery.Customer.Wallet;
+            if (wallet && runningBalance - depositAmount >= 0) {
+              runningBalance -= depositAmount;
+              await tx.wallet.update({ where: { id: wallet.id }, data: { balancePaise: runningBalance } });
+              await tx.walletTransaction.create({
+                data: {
+                  walletId: wallet.id, type: 'DEPOSIT_CHARGE', amountPaise: -depositAmount,
+                  balanceAfterPaise: runningBalance,
+                  description: `Bottle deposit charge (${newDeliveryCount} deliveries completed)`,
+                  referenceType: 'deposit', referenceId: delivery.id,
+                },
+              });
+              await tx.subscription.update({
+                where: { customerId },
+                data: { deliveryCount: newDeliveryCount, lastDepositAtDelivery: newDeliveryCount, lastDepositChargedAt: new Date() },
+              });
+            } else {
+              await tx.subscription.update({ where: { customerId }, data: { deliveryCount: newDeliveryCount } });
+              warning = 'Bottle deposit skipped due to insufficient balance.';
+            }
+          } else {
+            await tx.subscription.update({ where: { customerId }, data: { deliveryCount: newDeliveryCount } });
+          }
+        }
+      }
+
+      // C. Wallet charge (for both DELIVERED and NOT_DELIVERED from SCHEDULED)
+      if (shouldChargeWallet && currentChargePaise > 0 && delivery.Customer.Wallet) {
+        const wallet = delivery.Customer.Wallet;
+        const prevBalance = runningBalance;
+        runningBalance -= currentChargePaise;
+        await tx.wallet.update({
+          where: { id: wallet.id },
+          data: {
+            balancePaise: runningBalance,
+            negativeBalanceSince: runningBalance < 0 && prevBalance >= 0
+              ? new Date() : (runningBalance >= 0 ? null : wallet.negativeBalanceSince),
+          },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            walletId: wallet.id, type: 'MILK_CHARGE', amountPaise: -currentChargePaise,
+            balanceAfterPaise: runningBalance,
+            description: `Milk delivery (${delivery.quantityMl}ml) on ${toISTDateString(delivery.deliveryDate)} - ${newStatus}`,
+            referenceType: 'delivery', referenceId: delivery.id,
+          },
+        });
+      }
+
+      // D. Issue bottles (only on DELIVERED)
+      if (shouldIssueBottles && (delivery.largeBottles > 0 || delivery.smallBottles > 0)) {
+        const issueDate = new Date();
+        if (delivery.largeBottles > 0) {
+          currentLarge += delivery.largeBottles;
+          await tx.bottleLedger.create({
+            data: {
+              customerId, action: 'ISSUED', size: 'LARGE', quantity: delivery.largeBottles,
+              largeBottleBalanceAfter: currentLarge, smallBottleBalanceAfter: currentSmall,
+              deliveryId: delivery.id, issuedDate: issueDate, description: 'Delivered 1L bottles',
+            },
+          });
+        }
+        if (delivery.smallBottles > 0) {
+          currentSmall += delivery.smallBottles;
+          await tx.bottleLedger.create({
+            data: {
+              customerId, action: 'ISSUED', size: 'SMALL', quantity: delivery.smallBottles,
+              largeBottleBalanceAfter: currentLarge, smallBottleBalanceAfter: currentSmall,
+              deliveryId: delivery.id, issuedDate: issueDate, description: 'Delivered 500ml bottles',
+            },
+          });
+        }
+        if (inventory) {
+          await tx.inventory.update({
+            where: { id: inventory.id },
+            data: {
+              largeBottlesInCirculation: { increment: delivery.largeBottles },
+              smallBottlesInCirculation: { increment: delivery.smallBottles },
+            },
+          });
+        }
+      }
+
+      // E. Handle bottle collections
+      const prevLargeCollected = delivery.largeBottlesCollected || 0;
+      const prevSmallCollected = delivery.smallBottlesCollected || 0;
+      const newLargeCollected = (largeBottlesCollected ?? prevLargeCollected) - prevLargeCollected;
+      const newSmallCollected = (smallBottlesCollected ?? prevSmallCollected) - prevSmallCollected;
+
+      if (newLargeCollected > currentLarge) {
+        throw new Error(`Cannot collect ${newLargeCollected} large bottles. Customer only has ${currentLarge}.`);
+      }
+      if (newSmallCollected > currentSmall) {
+        throw new Error(`Cannot collect ${newSmallCollected} small bottles. Customer only has ${currentSmall}.`);
+      }
+
+      if (newLargeCollected !== 0 || newSmallCollected !== 0) {
+        if (newLargeCollected !== 0) {
+          currentLarge -= newLargeCollected;
+          await tx.bottleLedger.create({
+            data: {
+              customerId, action: 'RETURNED', size: 'LARGE', quantity: Math.abs(newLargeCollected),
+              largeBottleBalanceAfter: currentLarge, smallBottleBalanceAfter: currentSmall,
+              deliveryId: delivery.id, description: newLargeCollected > 0 ? 'Collected 1L bottles' : 'Correction: Reduced collected 1L bottles',
+            },
+          });
+        }
+        if (newSmallCollected !== 0) {
+          currentSmall -= newSmallCollected;
+          await tx.bottleLedger.create({
+            data: {
+              customerId, action: 'RETURNED', size: 'SMALL', quantity: Math.abs(newSmallCollected),
+              largeBottleBalanceAfter: currentLarge, smallBottleBalanceAfter: currentSmall,
+              deliveryId: delivery.id, description: newSmallCollected > 0 ? 'Collected 500ml bottles' : 'Correction: Reduced collected 500ml bottles',
+            },
+          });
+        }
+        // Mark oldest ISSUED entries as returned (FIFO)
+        if (newLargeCollected > 0) {
+          const unreturned = await tx.bottleLedger.findMany({
+            where: { customerId, action: 'ISSUED', size: 'LARGE', returnedAt: null, penaltyAppliedAt: null },
+            orderBy: { issuedDate: 'asc' },
+          });
+          let remaining = newLargeCollected;
+          for (const entry of unreturned) {
+            if (remaining <= 0) break;
+            await tx.bottleLedger.update({ where: { id: entry.id }, data: { returnedAt: new Date() } });
+            remaining -= entry.quantity;
+          }
+        }
+        if (newSmallCollected > 0) {
+          const unreturned = await tx.bottleLedger.findMany({
+            where: { customerId, action: 'ISSUED', size: 'SMALL', returnedAt: null, penaltyAppliedAt: null },
+            orderBy: { issuedDate: 'asc' },
+          });
+          let remaining = newSmallCollected;
+          for (const entry of unreturned) {
+            if (remaining <= 0) break;
+            await tx.bottleLedger.update({ where: { id: entry.id }, data: { returnedAt: new Date() } });
+            remaining -= entry.quantity;
+          }
+        }
+        // Update inventory
+        if (inventory && (newLargeCollected > 0 || newSmallCollected > 0)) {
+          await tx.inventory.update({
+            where: { id: inventory.id },
+            data: {
+              ...(newLargeCollected > 0 && { largeBottlesInCirculation: { decrement: newLargeCollected } }),
+              ...(newSmallCollected > 0 && { smallBottlesInCirculation: { decrement: newSmallCollected } }),
+            },
+          });
+        }
+      }
+    }, { timeout: 10000, isolationLevel: 'ReadCommitted' });
+
+    // Fetch updated wallet balance to return to frontend
+    const updatedWallet = await prisma.wallet.findUnique({ where: { customerId } });
+    const walletBalanceRs = updatedWallet ? (updatedWallet.balancePaise / 100).toFixed(2) : '0.00';
+
+    // Recalculate customer status after wallet changes (may transition to INACTIVE)
+    try {
+      await updateCustomerStatus(customerId);
+    } catch (e) {
+      console.error('Failed to update customer status after admin delivery update:', e);
+    }
+
+    // Send response immediately, then do non-critical work in background
+    res.json({ success: true, walletBalanceRs, ...(warning && { warning }) });
+
+    if (req.user) {
+      prisma.adminAuditLog.create({
+        data: {
+          adminId: req.user.id, action: 'DELIVERY_UPDATE', entityType: 'Delivery', entityId: deliveryId,
+          oldValue: { status: delivery.status, largeBottlesCollected: delivery.largeBottlesCollected, smallBottlesCollected: delivery.smallBottlesCollected },
+          newValue: updates, ipAddress: req.ip, userAgent: req.headers['user-agent'] ?? null,
+        },
+      }).catch(() => {});
+    }
+  } catch (e: any) {
+    console.error('Admin delivery update error:', e);
+    res.status(400).json({ error: e?.message || 'Failed to update delivery' });
+  }
+});
+
+// Admin wallet adjustment — add or deduct from a customer's wallet with a description
+router.post('/customers/:id/adjust-wallet', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const customerId = req.params.id;
+    const amountRs = parseFloat(req.body?.amountRs);
+    const description = typeof req.body?.description === 'string' ? req.body.description.trim() : '';
+
+    if (isNaN(amountRs) || amountRs === 0) {
+      return res.status(400).json({ error: 'Amount must be a non-zero number' });
+    }
+    if (!description) {
+      return res.status(400).json({ error: 'Description is required' });
+    }
+
+    const amountPaise = Math.round(amountRs * 100);
+
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+      include: { Wallet: true },
+    });
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+    if (!customer.Wallet) return res.status(400).json({ error: 'Customer has no wallet' });
+
+    const newBalance = customer.Wallet.balancePaise + amountPaise;
+
+    // Update wallet and create transaction in a single DB transaction
+    const [wallet, txn] = await prisma.$transaction([
+      prisma.wallet.update({
+        where: { id: customer.Wallet.id },
+        data: { balancePaise: newBalance },
+      }),
+      prisma.walletTransaction.create({
+        data: {
+          walletId: customer.Wallet.id,
+          type: amountPaise >= 0 ? 'ADMIN_CREDIT' : 'ADMIN_DEBIT',
+          amountPaise,
+          balanceAfterPaise: newBalance,
+          description,
+          referenceType: 'ADMIN',
+          referenceId: req.user?.id ?? null,
+        },
+      }),
+    ]);
+
+    // Send response first, audit log in background
+    res.json({
+      success: true,
+      wallet: {
+        balancePaise: newBalance,
+        balanceRs: (newBalance / 100).toFixed(2),
+      },
+      transaction: {
+        id: txn.id,
+        type: txn.type,
+        amountPaise: txn.amountPaise,
+        amountRs: (txn.amountPaise / 100).toFixed(2),
+        description: txn.description,
+        createdAt: txn.createdAt,
+      },
+    });
+
+    // Background: audit log (non-blocking)
+    if (req.user) {
+      prisma.adminAuditLog.create({
+        data: {
+          adminId: req.user.id,
+          action: 'WALLET_ADJUSTMENT',
+          entityType: 'Wallet',
+          entityId: customer.Wallet.id,
+          oldValue: { balancePaise: customer.Wallet.balancePaise },
+          newValue: { balancePaise: newBalance, amountPaise, description },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'] ?? null,
+        },
+      }).catch(() => {});
+    }
+  } catch (e) {
+    console.error('Admin wallet adjustment error:', e);
+    res.status(500).json({ error: 'Failed to adjust wallet' });
+  }
+});
+
+// Admin update delivery count — set deliveryCount on a customer's subscription
+router.patch('/customers/:id/delivery-count', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const customerId = req.params.id;
+    const deliveryCount = parseInt(req.body?.deliveryCount);
+    if (isNaN(deliveryCount) || deliveryCount < 0) {
+      return res.status(400).json({ error: 'deliveryCount must be a non-negative integer' });
+    }
+
+    const subscription = await prisma.subscription.findUnique({ where: { customerId } });
+    if (!subscription) return res.status(404).json({ error: 'Subscription not found' });
+
+    const oldCount = subscription.deliveryCount;
+    await prisma.subscription.update({
+      where: { customerId },
+      data: { deliveryCount },
+    });
+
+    res.json({ success: true, deliveryCount });
+
+    // Background: audit log
+    if (req.user) {
+      prisma.adminAuditLog.create({
+        data: {
+          adminId: req.user.id,
+          action: 'DELIVERY_COUNT_UPDATE',
+          entityType: 'Subscription',
+          entityId: subscription.id,
+          oldValue: { deliveryCount: oldCount },
+          newValue: { deliveryCount },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'] ?? null,
+        },
+      }).catch(() => {});
+    }
+  } catch (e) {
+    console.error('Admin delivery count update error:', e);
+    res.status(500).json({ error: 'Failed to update delivery count' });
   }
 });
 

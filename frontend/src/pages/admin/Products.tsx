@@ -360,7 +360,7 @@ export const Products: React.FC = () => {
             </div>
           )}
           <p className="text-sm text-gray-500 mt-4">
-            Charged when a customer is first approved, then every 90 deliveries. Amount = deposit per bottle × 2 bottles × number of bottles in subscription.
+            Charged when a customer is first approved, then every 120 deliveries. Amount = deposit per bottle × 2 bottles × number of bottles in subscription.
           </p>
         </Card>
 
