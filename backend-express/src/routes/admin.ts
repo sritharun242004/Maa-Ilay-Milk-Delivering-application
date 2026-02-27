@@ -1871,7 +1871,7 @@ router.post('/inventory/reduce-stock', isAuthenticated, isAdmin, async (req, res
     const large = parseInt(largeBottles) || 0;
     const small = parseInt(smallBottles) || 0;
 
-    if (!['BATCH_DISCARDED', 'BROKEN_REPORTED'].includes(action)) {
+    if (!['BATCH_DISCARDED', 'BROKEN_REPORTED', 'BATCH_REPLACED'].includes(action)) {
       return res.status(400).json({ error: 'Invalid action' });
     }
     if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
@@ -1940,7 +1940,12 @@ router.post('/inventory/reduce-stock', isAuthenticated, isAdmin, async (req, res
       });
     });
 
-    res.json({ success: true, message: action === 'BATCH_DISCARDED' ? 'Batch discarded successfully' : 'Broken bottles reported successfully' });
+    const messages: Record<string, string> = {
+      BATCH_REPLACED: 'Bottles replaced successfully',
+      BATCH_DISCARDED: 'Batch discarded successfully',
+      BROKEN_REPORTED: 'Broken bottles reported successfully',
+    };
+    res.json({ success: true, message: messages[action] || 'Stock updated successfully' });
   } catch (e) {
     console.error('Admin reduce stock error:', e);
     res.status(500).json(createErrorResponse(ErrorCode.DATABASE_ERROR, 'Failed to reduce stock'));

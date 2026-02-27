@@ -3,7 +3,7 @@ import { AdminLayout } from '../../components/layouts/AdminLayout';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Plus, Trash2, AlertTriangle, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, X, ChevronLeft, ChevronRight, Minus } from 'lucide-react';
 import { fetchWithCsrf } from '../../utils/csrf';
 import { getApiUrl } from '../../config/api';
 
@@ -188,6 +188,149 @@ function ReduceStockModal({
   );
 }
 
+function RemoveBottleModal({
+  onClose, onSuccess, maxLarge, maxSmall,
+}: {
+  onClose: () => void;
+  onSuccess: () => void;
+  maxLarge: number;
+  maxSmall: number;
+}) {
+  const [large, setLarge] = useState('');
+  const [small, setSmall] = useState('');
+  const [reason, setReason] = useState('');
+  const [action, setAction] = useState<'BATCH_REPLACED' | 'BATCH_DISCARDED' | 'BROKEN_REPORTED'>('BATCH_REPLACED');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const placeholders: Record<string, string> = {
+    BATCH_REPLACED: 'e.g. Q1 2026 quarterly replacement',
+    BATCH_DISCARDED: 'e.g. Old batch expired',
+    BROKEN_REPORTED: 'e.g. Damaged during handling',
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const l = parseInt(large) || 0;
+    const s = parseInt(small) || 0;
+    if (l === 0 && s === 0) { setError('Enter at least one quantity'); return; }
+    if (l < 0 || s < 0) { setError('Quantities must be non-negative'); return; }
+    if (!reason.trim()) { setError('Reason is required'); return; }
+    if (l > maxLarge) { setError(`1L bottles cannot exceed warehouse stock (${maxLarge})`); return; }
+    if (s > maxSmall) { setError(`500ml bottles cannot exceed warehouse stock (${maxSmall})`); return; }
+    setSubmitting(true);
+    setError('');
+    try {
+      const res = await fetchWithCsrf('/api/admin/inventory/reduce-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ largeBottles: l, smallBottles: s, reason: reason.trim(), action }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to update stock');
+      }
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const fillAll = () => {
+    setLarge(String(maxLarge));
+    setSmall(String(maxSmall));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <Card className="bg-white p-6 w-full max-w-md" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold">Remove Bottles</h2>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-600">In warehouse</span>
+            <span className="font-semibold text-gray-900">1L: {maxLarge} | 500ml: {maxSmall}</span>
+          </div>
+        </div>
+
+        {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reason for removal</label>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: 'BATCH_REPLACED', label: 'Quarterly Replace' },
+                { value: 'BATCH_DISCARDED', label: 'Discard' },
+                { value: 'BROKEN_REPORTED', label: 'Broken' },
+              ] as const).map(opt => (
+                <button key={opt.value} type="button"
+                  onClick={() => setAction(opt.value)}
+                  className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    action === opt.value
+                      ? opt.value === 'BATCH_REPLACED'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : opt.value === 'BATCH_DISCARDED'
+                        ? 'border-yellow-500 bg-yellow-50 text-yellow-700'
+                        : 'border-red-500 bg-red-50 text-red-700'
+                      : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                  }`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700">Quantity</label>
+              {action === 'BATCH_REPLACED' && (maxLarge > 0 || maxSmall > 0) && (
+                <button type="button" onClick={fillAll}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                  Use all
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">1L Bottles</label>
+                <input type="number" min="0" max={maxLarge} value={large} onChange={e => setLarge(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="0" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">500ml Bottles</label>
+                <input type="number" min="0" max={maxSmall} value={small} onChange={e => setSmall(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="0" />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes *</label>
+            <textarea value={reason} onChange={e => setReason(e.target.value)} rows={2} required
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              placeholder={placeholders[action]} />
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
+            <Button type="submit" variant="danger" loading={submitting} className="flex-1">
+              {action === 'BATCH_REPLACED' ? 'Replace' : action === 'BATCH_DISCARDED' ? 'Discard' : 'Report'}
+            </Button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
 function LogsModal({ onClose }: { onClose: () => void }) {
   const [logs, setLogs] = useState<InventoryLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -231,6 +374,7 @@ function LogsModal({ onClose }: { onClose: () => void }) {
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
             <option value="">All Actions</option>
             <option value="BATCH_ADDED">Added</option>
+            <option value="BATCH_REPLACED">Replaced</option>
             <option value="BATCH_DISCARDED">Discarded</option>
             <option value="BROKEN_REPORTED">Broken</option>
           </select>
@@ -289,6 +433,8 @@ function ActionBadge({ action }: { action: string }) {
   switch (action) {
     case 'BATCH_ADDED':
       return <Badge variant="success">Added</Badge>;
+    case 'BATCH_REPLACED':
+      return <Badge variant="info">Replaced</Badge>;
     case 'BATCH_DISCARDED':
       return <Badge variant="warning">Discarded</Badge>;
     case 'BROKEN_REPORTED':
@@ -316,6 +462,7 @@ export default function Inventory() {
   const [reduceAction, setReduceAction] = useState<'BATCH_DISCARDED' | 'BROKEN_REPORTED' | null>(null);
   const [showLogs, setShowLogs] = useState(false);
   const [showReportMenu, setShowReportMenu] = useState(false);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -419,6 +566,13 @@ export default function Inventory() {
             <p className="text-sm text-gray-500 mb-1">In Warehouse</p>
             <p className="text-3xl font-bold text-gray-900">{d.inWarehouse}</p>
             <p className="text-sm text-gray-400 mt-1">1L: {d.largeInWarehouse} | 500ml: {d.smallInWarehouse}</p>
+            {d.inWarehouse > 0 && (
+              <button onClick={() => setShowRemoveModal(true)}
+                className="mt-3 flex items-center gap-1 px-3 py-1.5 rounded-md border border-gray-200 text-xs font-medium text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors">
+                <Minus className="w-3 h-3" />
+                Remove Bottles
+              </button>
+            )}
           </Card>
         </div>
 
@@ -476,6 +630,17 @@ export default function Inventory() {
           onSuccess={() => handleMutationSuccess(
             reduceAction === 'BATCH_DISCARDED' ? 'Bottles discarded successfully' : 'Broken bottles reported'
           )}
+        />
+      )}
+      {showRemoveModal && (
+        <RemoveBottleModal
+          maxLarge={d.largeInWarehouse}
+          maxSmall={d.smallInWarehouse}
+          onClose={() => setShowRemoveModal(false)}
+          onSuccess={() => {
+            handleMutationSuccess('Bottles removed successfully');
+            setShowRemoveModal(false);
+          }}
         />
       )}
       {showLogs && <LogsModal onClose={() => setShowLogs(false)} />}
