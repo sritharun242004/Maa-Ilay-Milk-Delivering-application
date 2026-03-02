@@ -58,6 +58,9 @@ export const Home: React.FC = () => {
             src="/Google Gemini Image (1).webp"
             alt="Maa Ilay Fresh Milk"
             className="w-full h-full object-cover object-top"
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
           />
         </div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent"></div>
