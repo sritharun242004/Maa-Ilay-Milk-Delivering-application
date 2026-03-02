@@ -16,7 +16,6 @@ import {
   Twitter,
 } from 'lucide-react';
 
-import heroBg from '../assets/Hero Background.png';
 import product1l from '../assets/product-1l.jpg';
 import product500ml from '../assets/product-500ml.jpg';
 import commitmentImg from '../assets/commitment.jpg';
@@ -56,7 +55,7 @@ export const Home: React.FC = () => {
       <section className="relative h-screen flex items-end overflow-hidden">
         <div className="absolute inset-0 z-0">
           <img
-            src={heroBg}
+            src="/Google Gemini Image (1).webp"
             alt="Maa Ilay Fresh Milk"
             className="w-full h-full object-cover object-top"
           />
