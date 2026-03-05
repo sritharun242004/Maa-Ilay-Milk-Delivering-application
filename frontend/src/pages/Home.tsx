@@ -16,9 +16,6 @@ import {
   Twitter,
 } from 'lucide-react';
 
-import product1l from '../assets/product-1l.jpg';
-import product500ml from '../assets/product-500ml.jpg';
-import commitmentImg from '../assets/commitment.jpg';
 
 export const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -55,9 +52,10 @@ export const Home: React.FC = () => {
       <section className="relative h-screen flex items-end overflow-hidden">
         <div className="absolute inset-0 z-0">
           <img
-            src="/Google Gemini Image (1).webp"
+            src="/Gemini Generated Image (1).webp"
             alt="Maa Ilay Fresh Milk"
             className="w-full h-full object-cover object-top"
+            style={{ objectPosition: '30% top' }}
             loading="eager"
             fetchPriority="high"
             decoding="async"
@@ -180,14 +178,14 @@ export const Home: React.FC = () => {
                 name: 'Fresh Cow Milk (1L)',
                 benefit: 'Perfect for families. Pure, fresh milk delivered every morning.',
                 price: `₹${daily1LRs}/day`,
-                image: product1l,
+                image: '/Gemini Generated Image.webp',
                 popular: true,
               },
               {
                 name: 'Fresh Cow Milk (500ml)',
                 benefit: 'Ideal for individuals. Fresh, pure milk in a convenient size for daily consumption.',
                 price: `₹${daily500mlRs}/day`,
-                image: product500ml,
+                image: '/Gemini Generated Image.webp',
                 popular: false,
               },
             ].map((product, index) => (
@@ -200,8 +198,12 @@ export const Home: React.FC = () => {
                     Popular
                   </div>
                 )}
-                <div className="w-full h-72 bg-gray-50 overflow-hidden p-4">
-                  <img src={product.image} alt={product.name} className="w-full h-full object-contain" />
+                <div className="w-full h-72 bg-gray-50 overflow-hidden p-2">
+                  <img
+                    src={product.image}
+                    alt={product.name}
+                    className="w-full h-full object-contain"
+                  />
                 </div>
                 <div className="p-6">
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">{product.name}</h3>
@@ -226,8 +228,8 @@ export const Home: React.FC = () => {
           <div className="grid lg:grid-cols-2 grid-cols-1 gap-14 items-center">
             <div className="rounded-xl overflow-hidden shadow-md">
               <img
-                src={commitmentImg}
-                alt="Our Commitment"
+                src="/Gemini Generated Image.png"
+                alt="Our Commitment - Maa Ilay Delivery"
                 className="w-full aspect-[4/3] object-cover"
               />
             </div>
