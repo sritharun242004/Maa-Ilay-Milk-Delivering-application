@@ -19,7 +19,8 @@
     "create-delivery": "tsx scripts/create-today-delivery.ts",
     "recalculate-statuses": "tsx src/scripts/recalculateStatuses.ts",
     "debug-delivery-status": "tsx src/scripts/debugDeliveryStatus.ts",
-    "fix-wallet-history": "tsx src/scripts/fixWalletTransactionHistory.ts"
+    "fix-wallet-history": "tsx src/scripts/fixWalletTransactionHistory.ts",
+    "create-missing-wallets": "tsx src/scripts/createMissingWallets.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

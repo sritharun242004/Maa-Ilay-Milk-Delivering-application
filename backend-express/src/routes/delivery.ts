@@ -348,6 +348,7 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
             addressLine1: true,
             addressLine2: true,
             landmark: true,
+            addressLink: true,
             deliveryNotes: true,
             status: true,
             deliveryStartDate: true, // Include for filtering
@@ -464,6 +465,7 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
         addressLine1: d.Customer.addressLine1,
         addressLine2: d.Customer.addressLine2,
         landmark: d.Customer.landmark,
+        addressLink: d.Customer.addressLink,
         deliveryNotes: d.Customer.deliveryNotes,
         status: d.Customer.status,
         subscription: d.Customer.Subscription
@@ -519,6 +521,7 @@ router.get('/history', isAuthenticated, isDelivery, async (req, res) => {
             addressLine1: true,
             addressLine2: true,
             landmark: true,
+            addressLink: true,
           },
         },
       },
@@ -568,6 +571,7 @@ router.get('/customer/:customerId', isAuthenticated, isDelivery, async (req, res
           addressLine1: true,
           addressLine2: true,
           landmark: true,
+          addressLink: true,
           deliveryNotes: true,
           status: true,
           Subscription: { select: { dailyQuantityMl: true, status: true } },
@@ -596,6 +600,7 @@ router.get('/customer/:customerId', isAuthenticated, isDelivery, async (req, res
         addressLine1: customer.addressLine1,
         addressLine2: customer.addressLine2,
         landmark: customer.landmark,
+        addressLink: customer.addressLink,
         deliveryNotes: customer.deliveryNotes,
         status: customer.status,
         subscription: customer.Subscription

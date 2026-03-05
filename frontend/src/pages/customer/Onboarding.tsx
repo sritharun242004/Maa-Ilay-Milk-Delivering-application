@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { MapPin, Phone, Home, User, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
+import { CheckCircle, AlertCircle, ChevronDown, ExternalLink } from 'lucide-react';
 import { fetchWithCsrf, clearCsrfToken } from '../../utils/csrf';
 import { getApiUrl } from '../../config/api';
-import { AddressAutocomplete } from '../../components/AddressAutocomplete';
 
 const SERVICEABLE_AREAS = [
   { area: 'Reddiyarpalayam', pincode: '605010' },
@@ -27,6 +26,7 @@ export const CustomerOnboarding: React.FC = () => {
     addressLine1: '',
     addressLine2: '',
     landmark: '',
+    addressLink: '',
     city: 'Pondicherry',
     pincode: '',
   });
@@ -181,32 +181,6 @@ export const CustomerOnboarding: React.FC = () => {
               <p className="text-xs text-gray-400 mt-1">We'll use this for delivery updates</p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Search Address
-              </label>
-              <AddressAutocomplete
-                onPlaceSelected={(place) => {
-                  const serviceablePincodes = SERVICEABLE_AREAS.map(a => a.pincode);
-                  const autoPin = place.pincode?.replace(/\D/g, '') || '';
-                  const isServiceable = serviceablePincodes.includes(autoPin);
-                  if (autoPin && !isServiceable) {
-                    setPincodeMode('manual');
-                  } else if (isServiceable) {
-                    setPincodeMode('select');
-                  }
-                  setFormData((prev) => ({
-                    ...prev,
-                    addressLine1: place.addressLine1 || prev.addressLine1,
-                    addressLine2: place.addressLine2 || prev.addressLine2,
-                    city: place.city || prev.city,
-                    pincode: autoPin || prev.pincode,
-                  }));
-                }}
-                className={inputClasses}
-              />
-              <p className="text-xs text-gray-400">Search to auto-fill your address, or type manually below</p>
-            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -250,6 +224,24 @@ export const CustomerOnboarding: React.FC = () => {
                 className={inputClasses}
               />
               <p className="text-xs text-gray-400 mt-1">Helps our delivery person find you easily</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Google Maps Link <span className="text-gray-400 font-normal">(Optional)</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="url"
+                  name="addressLink"
+                  value={formData.addressLink}
+                  onChange={handleChange}
+                  placeholder="https://maps.google.com/..."
+                  className={inputClasses}
+                />
+                <ExternalLink className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Share your Google Maps location link for accurate delivery</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

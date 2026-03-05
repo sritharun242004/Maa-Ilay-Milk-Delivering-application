@@ -98,13 +98,24 @@ router.post('/complete-profile', isAuthenticated, isCustomer, async (req, res) =
 
     // Persist to database — updates the customer record created at Google sign-in
     // Status: VISITOR (user completed profile but hasn't subscribed yet)
-    const customer = await prisma.customer.update({
-      where: { id: req.user.id },
-      data: {
-        ...sanitized,
-        status: 'VISITOR',
-      },
-    });
+    // Also create wallet if it doesn't exist
+    const [customer] = await prisma.$transaction([
+      prisma.customer.update({
+        where: { id: req.user.id },
+        data: {
+          ...sanitized,
+          status: 'VISITOR',
+        },
+      }),
+      prisma.wallet.upsert({
+        where: { customerId: req.user.id },
+        update: {}, // No updates needed if wallet exists
+        create: {
+          customerId: req.user.id,
+          balancePaise: 0,
+        },
+      }),
+    ]);
 
     res.json({
       success: true,

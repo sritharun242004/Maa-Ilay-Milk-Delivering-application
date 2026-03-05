@@ -73,6 +73,7 @@ model Customer {
   addressLine1         String
   addressLine2         String?
   landmark             String?
+  addressLink          String?
   city                 String                 @default("Pondicherry")
   pincode              String
   status               CustomerStatus         @default(VISITOR)

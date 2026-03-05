@@ -260,6 +260,37 @@ export function sanitizeEnum<T extends string>(
 }
 
 /**
+ * Sanitize URL - validates and cleans URL input
+ */
+export function sanitizeUrl(url: string | null | undefined): string | null {
+  if (!url || url.trim() === '') return null;
+
+  let cleaned = String(url).trim();
+
+  // Remove any HTML
+  cleaned = DOMPurify.sanitize(cleaned, { ALLOWED_TAGS: [] });
+
+  // Validate URL format
+  try {
+    const urlObj = new URL(cleaned);
+
+    // Only allow http and https protocols
+    if (!['http:', 'https:'].includes(urlObj.protocol)) {
+      throw new Error('Only HTTP and HTTPS URLs are allowed');
+    }
+
+    // Validate length
+    if (cleaned.length > 2000) {
+      throw new Error('URL is too long (max 2000 characters)');
+    }
+
+    return cleaned;
+  } catch (error) {
+    throw new Error('Invalid URL format');
+  }
+}
+
+/**
  * Sanitize customer profile data
  */
 export function sanitizeCustomerProfile(data: any) {
@@ -269,6 +300,7 @@ export function sanitizeCustomerProfile(data: any) {
     addressLine1: sanitizeAddress(data.addressLine1),
     addressLine2: data.addressLine2 ? sanitizeAddress(data.addressLine2) : null,
     landmark: data.landmark ? sanitizeAddress(data.landmark) : null,
+    addressLink: data.addressLink ? sanitizeUrl(data.addressLink) : null,
     city: sanitizeName(data.city || 'Pondicherry'),
     pincode: sanitizePincode(data.pincode),
   };

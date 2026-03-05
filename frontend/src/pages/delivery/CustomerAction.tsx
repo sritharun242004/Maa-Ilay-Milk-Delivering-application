@@ -5,7 +5,7 @@ import { DeliveryLayout } from '../../components/layouts/DeliveryLayout';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
-import { CheckCircle, XCircle, ArrowRight, Minus, Plus, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, ArrowRight, Minus, Plus, AlertCircle, ExternalLink } from 'lucide-react';
 import { deliveryKeys } from '../../hooks/useDeliveryData';
 import { fetchWithCsrf } from '../../utils/csrf';
 
@@ -16,6 +16,7 @@ interface CustomerData {
   addressLine1: string;
   addressLine2: string | null;
   landmark: string | null;
+  addressLink: string | null;
   deliveryNotes: string | null;
   status: string;
   subscription: { dailyQuantityMl: number; status: string } | null;
@@ -302,6 +303,19 @@ export const CustomerAction: React.FC = () => {
             <div className="md:col-span-2">
               <p className="text-sm text-gray-600 mb-1">Address</p>
               <p className="text-lg font-semibold">{address || customer.addressLine1}</p>
+              {customer.addressLink && (
+                <div className="mt-2">
+                  <a
+                    href={customer.addressLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    View on Google Maps
+                  </a>
+                </div>
+              )}
             </div>
             <div>
               <p className="text-sm text-gray-600 mb-1">Plan</p>

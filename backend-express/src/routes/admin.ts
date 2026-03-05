@@ -1598,7 +1598,16 @@ router.post('/customers/:id/adjust-wallet', isAuthenticated, isAdmin, async (req
       include: { Wallet: true },
     });
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
-    if (!customer.Wallet) return res.status(400).json({ error: 'Customer has no wallet' });
+
+    // Auto-create wallet if it doesn't exist (fixes legacy customers)
+    if (!customer.Wallet) {
+      customer.Wallet = await prisma.wallet.create({
+        data: {
+          customerId,
+          balancePaise: 0,
+        },
+      });
+    }
 
     const newBalance = customer.Wallet.balancePaise + amountPaise;
 

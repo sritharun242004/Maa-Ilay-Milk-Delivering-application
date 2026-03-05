@@ -21,6 +21,10 @@ export const Home: React.FC = () => {
   const navigate = useNavigate();
   const { daily1LRs, daily500mlRs } = usePricing();
 
+  // Calculate 31-day monthly pricing for home page display
+  const monthly1LRs = (daily1LRs * 31).toLocaleString('en-IN');
+  const monthly500mlRs = (daily500mlRs * 31).toLocaleString('en-IN');
+
   const scrollToProducts = () => {
     document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -177,14 +181,14 @@ export const Home: React.FC = () => {
               {
                 name: 'Fresh Cow Milk (1L)',
                 benefit: 'Perfect for families. Pure, fresh milk delivered every morning.',
-                price: `₹${daily1LRs}/day`,
+                price: `₹${monthly1LRs}/month`,
                 image: '/Gemini Generated Image.webp',
                 popular: true,
               },
               {
                 name: 'Fresh Cow Milk (500ml)',
                 benefit: 'Ideal for individuals. Fresh, pure milk in a convenient size for daily consumption.',
-                price: `₹${daily500mlRs}/day`,
+                price: `₹${monthly500mlRs}/month`,
                 image: '/Gemini Generated Image.webp',
                 popular: false,
               },
