@@ -305,7 +305,7 @@ function AddDeliveryModal({
               required
               maxLength={10}
               className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none"
-              placeholder="9876543210"
+              placeholder="9600042507"
             />
           </div>
           <div>

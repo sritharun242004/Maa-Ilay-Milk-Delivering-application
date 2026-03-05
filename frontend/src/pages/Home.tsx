@@ -11,9 +11,6 @@ import {
   CheckCircle,
   Mail,
   MapPin,
-  Facebook,
-  Instagram,
-  Twitter,
 } from 'lucide-react';
 
 
@@ -39,7 +36,7 @@ export const Home: React.FC = () => {
             className="h-12 w-auto object-contain"
           />
           <div className="flex items-center gap-4">
-            <a href="tel:+919876543210" className="hidden md:flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors">
+            <a href="tel:+919600042507" className="hidden md:flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors">
               <Phone className="w-3.5 h-3.5" />
               Call Us
             </a>
@@ -334,31 +331,37 @@ export const Home: React.FC = () => {
               <div className="space-y-3">
                 <div className="flex gap-2 text-gray-300 text-sm">
                   <Phone className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <span>+91 98765 43210</span>
+                  <span>+91 96000 42507</span>
                 </div>
                 <div className="flex gap-2 text-gray-300 text-sm">
                   <Mail className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <span>hello@maailay.com</span>
+                  <span>info@maailay.com</span>
                 </div>
                 <div className="flex gap-2 text-gray-300 text-sm">
                   <MapPin className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <span>Pondicherry & Auroville</span>
+                  <span>65, Canteen St. Heritage Town, Pudhucherry 605001</span>
                 </div>
               </div>
             </div>
 
             <div>
-              <h3 className="text-sm font-semibold uppercase tracking-wide mb-4">Follow Us</h3>
-              <div className="flex gap-4">
-                {[Facebook, Instagram, Twitter].map((Icon, index) => (
-                  <a
-                    key={index}
-                    href="#"
-                    className="text-gray-300 hover:text-green-400 transition-colors duration-200"
-                  >
-                    <Icon className="w-5 h-5" />
-                  </a>
-                ))}
+              <h3 className="text-sm font-semibold uppercase tracking-wide mb-4">Need Help?</h3>
+              <p className="text-gray-300 text-sm mb-3">You are our top most priority</p>
+              <div className="space-y-3">
+                <a
+                  href="https://wa.me/919600042507"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-gray-300 hover:text-green-400 transition-colors text-sm"
+                >
+                  <Phone className="w-4 h-4" />
+                  WhatsApp: +91 96000 42507
+                </a>
+                <div className="text-gray-300 text-sm">
+                  <p className="font-medium mb-1">Opening Hours</p>
+                  <p>Mon – Sat: 8:00 AM - 9:00 PM</p>
+                  <p>Sun: 9:00 AM - 7:00 PM</p>
+                </div>
               </div>
             </div>
           </div>

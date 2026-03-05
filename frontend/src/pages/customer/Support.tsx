@@ -72,20 +72,20 @@ export const Support: React.FC = () => {
                   {
                     icon: Phone,
                     label: 'Call Us',
-                    value: '+91 98765 43210',
-                    subtext: 'Mon-Sat, 8 AM - 8 PM',
+                    value: '+91 96000 42507',
+                    subtext: 'Mon-Sat: 8:00 AM - 9:00 PM, Sun: 9:00 AM - 7:00 PM',
                   },
                   {
                     icon: Mail,
                     label: 'Email Us',
-                    value: 'support@maailay.com',
+                    value: 'info@maailay.com',
                     subtext: 'We reply within 24 hours',
                   },
                   {
                     icon: MessageSquare,
                     label: 'WhatsApp',
-                    value: '+91 98765 43210',
-                    subtext: 'Quick support',
+                    value: '+91 96000 42507',
+                    subtext: 'You are our top most priority',
                   },
                 ...(deliveryPerson
                   ? [

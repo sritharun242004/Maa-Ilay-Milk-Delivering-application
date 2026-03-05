@@ -64,7 +64,7 @@ export const DeliveryLogin: React.FC = () => {
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="+91 98765 43210"
+              placeholder="+91 96000 42507"
               className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-green-800 focus:ring-2 focus:ring-green-800/10 transition-colors outline-none"
             />
           </div>

@@ -15,7 +15,7 @@ export const mockDeliveryStaff: DeliveryStaff[] = [
   {
     id: '1',
     name: 'Rajesh Kumar',
-    phone: '+91 98765 43210',
+    phone: '+91 96000 42507',
     email: 'rajesh@maailay.com',
     zone: 'Zone 1',
     status: 'active',
@@ -27,7 +27,7 @@ export const mockDeliveryStaff: DeliveryStaff[] = [
   {
     id: '2',
     name: 'Suresh Babu',
-    phone: '+91 98765 43211',
+    phone: '+91 96000 42508',
     zone: 'Zone 1',
     status: 'active',
     vehicleType: 'bike',
@@ -38,7 +38,7 @@ export const mockDeliveryStaff: DeliveryStaff[] = [
   {
     id: '7',
     name: 'Kumar Das',
-    phone: '+91 98765 43217',
+    phone: '+91 96000 42509',
     zone: 'Zone 2',
     status: 'active',
     vehicleType: 'van',
@@ -49,7 +49,7 @@ export const mockDeliveryStaff: DeliveryStaff[] = [
   {
     id: '8',
     name: 'Anand Raj',
-    phone: '+91 98765 43218',
+    phone: '+91 96000 42510',
     zone: 'Zone 2',
     status: 'active',
     vehicleType: 'bike',
@@ -60,7 +60,7 @@ export const mockDeliveryStaff: DeliveryStaff[] = [
   {
     id: '9',
     name: 'Vinod Kumar',
-    phone: '+91 98765 43219',
+    phone: '+91 96000 42511',
     zone: 'Zone 1',
     status: 'on-leave',
     vehicleType: 'bike',
