@@ -358,7 +358,7 @@ export const Home: React.FC = () => {
                   WhatsApp: +91 96000 42507
                 </a>
                 <div className="text-gray-300 text-sm">
-                  <p className="font-medium mb-1">Opening Hours</p>
+                  <p className="font-medium mb-1">Contact Hours</p>
                   <p>Mon – Sat: 8:00 AM - 9:00 PM</p>
                   <p>Sun: 9:00 AM - 7:00 PM</p>
                 </div>
