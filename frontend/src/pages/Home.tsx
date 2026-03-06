@@ -179,14 +179,14 @@ export const Home: React.FC = () => {
                 name: 'Fresh Cow Milk (1L)',
                 benefit: 'Perfect for families. Pure, fresh milk delivered every morning.',
                 price: `₹${monthly1LRs}/month`,
-                image: '/Gemini Generated Image.webp',
+                image: '/Gemini Generated Image (1).png',
                 popular: true,
               },
               {
                 name: 'Fresh Cow Milk (500ml)',
                 benefit: 'Ideal for individuals. Fresh, pure milk in a convenient size for daily consumption.',
                 price: `₹${monthly500mlRs}/month`,
-                image: '/Gemini Generated Image.webp',
+                image: '/Gemini Generated Image (1).png',
                 popular: false,
               },
             ].map((product, index) => (
@@ -229,7 +229,7 @@ export const Home: React.FC = () => {
           <div className="grid lg:grid-cols-2 grid-cols-1 gap-14 items-center">
             <div className="rounded-xl overflow-hidden shadow-md">
               <img
-                src="/Gemini Generated Image.png"
+                src="/Gemini Generated Image (1).png"
                 alt="Our Commitment - Maa Ilay Delivery"
                 className="w-full aspect-[4/3] object-cover"
               />
