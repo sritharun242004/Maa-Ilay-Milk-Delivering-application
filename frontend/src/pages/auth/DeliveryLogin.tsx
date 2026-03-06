@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { getApiUrl } from '../../config/api';
+import { fetchWithCsrf } from '../../utils/csrf';
 import { Eye, EyeOff } from 'lucide-react';
 
 export const DeliveryLogin: React.FC = () => {
@@ -17,10 +17,9 @@ export const DeliveryLogin: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await fetch(getApiUrl('/api/auth/delivery/login'), {
+      const response = await fetchWithCsrf('/api/auth/delivery/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           phone,
           password,

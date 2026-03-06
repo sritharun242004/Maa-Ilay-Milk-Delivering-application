@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { getApiUrl } from '../../config/api';
+import { fetchWithCsrf } from '../../utils/csrf';
 import { Eye, EyeOff } from 'lucide-react';
 
 export const AdminLogin: React.FC = () => {
@@ -17,10 +17,9 @@ export const AdminLogin: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await fetch(getApiUrl('/api/auth/admin/login'), {
+      const response = await fetchWithCsrf('/api/auth/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           email,
           password,
