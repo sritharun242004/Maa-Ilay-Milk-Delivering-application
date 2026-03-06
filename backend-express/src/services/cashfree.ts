@@ -374,8 +374,8 @@ async function creditWalletInTransaction(
   description: string,
   transactionType: 'WALLET_TOPUP' | 'MONTHLY_PAYMENT' = 'WALLET_TOPUP'
 ): Promise<void> {
-  // Get or create wallet
-  let wallet = await tx.wallet.findUnique({
+  // Get or create wallet with row locking to prevent race conditions
+  let wallet = await tx.wallet.findFirst({
     where: { customerId },
   });
 

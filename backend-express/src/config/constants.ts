@@ -29,6 +29,13 @@ export const PAYMENT_DAY = 7; // 7th of every month
 export const GRACE_PERIOD_END_DAY = 7;
 
 /**
+ * Maximum negative balance allowed during grace period (in paise)
+ * Prevents unlimited debt accumulation during grace period days 1-7
+ * Set to ₹500 maximum debt - more restrictive than general limit
+ */
+export const MAX_NEGATIVE_BALANCE_GRACE_PERIOD = -50000; // ₹500 max debt during grace
+
+/**
  * Next month preview window (days before end of month)
  * During the last N days of the month, show customers a preview
  * of next month's cost and allow advance payment

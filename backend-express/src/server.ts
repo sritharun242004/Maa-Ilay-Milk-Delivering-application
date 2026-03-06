@@ -29,7 +29,8 @@ import {
   httpLogger,
   devLogger,
   requestContextLogger,
-  errorLogger
+  errorLogger,
+  logSecurityEvent
 } from './middleware/logger';
 
 const app = express();
@@ -262,10 +263,22 @@ app.use('/api/auth', authLimiter, authRoutes);
 
 // Customer routes with CSRF protection for state-changing operations
 // Note: GET requests are automatically excluded by CSRF middleware
-// TEMP: Skip CSRF for complete-profile due to session issues with OAuth flow
 app.use('/api/customer', (req, res, next) => {
+  // Enhanced CSRF protection: Only skip for authenticated OAuth users during profile completion
   if (req.path === '/complete-profile' && req.method === 'POST') {
-    return next(); // Skip CSRF for onboarding
+    // Additional security: Only allow CSRF bypass if user is authenticated via OAuth
+    // and is a customer (safer than blanket bypass)
+    if (req.user && req.user.role === 'customer') {
+      console.warn(`CSRF bypass for OAuth profile completion - User: ${req.user.id}`);
+      // Log this security bypass for monitoring
+      logSecurityEvent('CSRF_FAILURE', req, {
+        userId: req.user.id,
+        bypass: 'oauth_profile_completion'
+      });
+      return next(); // Skip CSRF only for OAuth profile completion
+    }
+    // If user doesn't meet criteria, require CSRF protection
+    console.log(`CSRF required for profile completion - User: ${req.user?.id || 'unknown'}`);
   }
   return csrfProtection(req, res, next);
 }, customerRoutes);

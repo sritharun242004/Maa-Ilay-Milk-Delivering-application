@@ -11,9 +11,9 @@ import { getNowIST } from './dateUtils';
  * - PENDING_APPROVAL: Has subscription but no delivery person assigned
  * - ACTIVE: Has delivery person + sufficient wallet balance (wallet-based gating)
  * - INACTIVE: Has delivery person but wallet insufficient for 1 delivery (after grace period)
- * - PAUSED: User manually paused (has any future pause dates)
+ * - PAUSED: User manually paused (has pause scheduled for today)
  *
- * Grace period (days 1-7): ACTIVE regardless of wallet balance
+ * Grace period (days 1-7): ACTIVE regardless of wallet balance (allow negative)
  * After grace period (8th+): wallet must cover at least 1 day's delivery
  * MonthlyPayment status is for tracking only, NOT a gating mechanism.
  */
@@ -28,9 +28,7 @@ export async function calculateCustomerStatus(customerId: string): Promise<'VISI
       Wallet: true,
       Pause: {
         where: {
-          pauseDate: {
-            gte: today
-          }
+          pauseDate: today
         },
         take: 1,
       }
@@ -51,12 +49,12 @@ export async function calculateCustomerStatus(customerId: string): Promise<'VISI
     return 'PENDING_APPROVAL';
   }
 
-  // PAUSED: Has any future pause dates (today or later)
+  // PAUSED: Has pause for today (query already filters for today's date)
   if (customer.Pause && customer.Pause.length > 0) {
     return 'PAUSED';
   }
 
-  // During grace period (days 1-7): ACTIVE regardless of wallet balance
+  // During grace period (days 1-7): ACTIVE regardless of wallet balance (allow negative)
   const currentDay = now.getDate();
   if (currentDay <= GRACE_PERIOD_END_DAY) {
     return 'ACTIVE';
@@ -92,7 +90,7 @@ export async function updateCustomerStatus(customerId: string): Promise<'VISITOR
  * Checks if customer can receive deliveries today
  * Used by delivery person routes
  *
- * Grace period (days 1-7): allow delivery even with negative balance
+ * Grace period (days 1-7): allow delivery regardless of wallet balance (allow negative)
  * After grace period (8th+): wallet must cover at least 1 day's delivery
  */
 export async function canReceiveDelivery(customerId: string): Promise<boolean> {
@@ -127,7 +125,7 @@ export async function canReceiveDelivery(customerId: string): Promise<boolean> {
     return false;
   }
 
-  // During grace period (days 1-7): allow delivery regardless of wallet balance
+  // During grace period (days 1-7): allow delivery regardless of wallet balance (allow negative)
   const currentDay = nowIST.getDate();
   if (currentDay <= GRACE_PERIOD_END_DAY) {
     return true;

@@ -20,24 +20,41 @@ router.get('/google/callback',
   passport.authenticate('google', { failureRedirect: failureRedirectUrl }),
   async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    
-    // Check if customer needs onboarding (missing required fields)
-    if (req.user && req.user.role === 'customer') {
-      const customer = await prisma.customer.findUnique({
-        where: { id: req.user.id },
-      });
-      
-      // If phone or address needs update (onboarding not completed), redirect to onboarding
-      if (!customer?.phone || !customer?.addressLine1 || 
-          customer.phone.length !== 10 || 
-          customer.addressLine1 === 'Onboarding Pending' ||
-          customer.pincode === '000000') {
-        return res.redirect(`${frontendUrl}/customer/onboarding`);
+
+    // Regenerate session after OAuth login to prevent session fixation attacks
+    const user = req.user;
+    req.session.regenerate(async (err) => {
+      if (err) {
+        console.error('Session regeneration failed after OAuth:', err);
+        return res.redirect(`${frontendUrl}/customer/login?error=session_error`);
       }
-    }
-    
-    // Otherwise, go to dashboard
-    res.redirect(`${frontendUrl}/customer/dashboard`);
+
+      // Re-establish user on new session
+      req.logIn(user!, async (loginErr) => {
+        if (loginErr) {
+          console.error('Re-login after session regeneration failed:', loginErr);
+          return res.redirect(`${frontendUrl}/customer/login?error=login_error`);
+        }
+
+        // Check if customer needs onboarding (missing required fields)
+        if (req.user && req.user.role === 'customer') {
+          const customer = await prisma.customer.findUnique({
+            where: { id: req.user.id },
+          });
+
+          // If phone or address needs update (onboarding not completed), redirect to onboarding
+          if (!customer?.phone || !customer?.addressLine1 ||
+              customer.phone.length !== 10 ||
+              customer.addressLine1 === 'Onboarding Pending' ||
+              customer.pincode === '000000') {
+            return res.redirect(`${frontendUrl}/customer/onboarding`);
+          }
+        }
+
+        // Otherwise, go to dashboard
+        res.redirect(`${frontendUrl}/customer/dashboard`);
+      });
+    });
   }
 );
 
