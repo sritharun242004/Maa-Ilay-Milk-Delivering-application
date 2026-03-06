@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { KeyRound, Droplet } from 'lucide-react';
-import { getApiUrl } from '../../config/api';
+import { fetchWithCsrf } from '../../utils/csrf';
 
 export const DeliveryChangePassword: React.FC = () => {
   const navigate = useNavigate();
@@ -25,9 +25,8 @@ export const DeliveryChangePassword: React.FC = () => {
       return;
     }
     setSubmitting(true);
-    fetch(getApiUrl('/api/delivery/me/password'), {
+    fetchWithCsrf('/api/delivery/me/password', {
       method: 'PUT',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         currentPassword,

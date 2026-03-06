@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { clearAllCaches } from '../hooks/useCachedData';
 import { getApiUrl } from '../config/api';
-import { preloadCsrfToken } from '../utils/csrf';
+import { preloadCsrfToken, fetchWithCsrf } from '../utils/csrf';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -30,7 +30,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = () => {
     // Clear server session so cookie is invalidated
-    fetch(getApiUrl('/api/auth/logout'), { method: 'POST', credentials: 'include' }).catch(() => { });
+    fetchWithCsrf('/api/auth/logout', { method: 'POST' }).catch(() => { });
 
     // Clear all cached data on logout
     clearAllCaches();

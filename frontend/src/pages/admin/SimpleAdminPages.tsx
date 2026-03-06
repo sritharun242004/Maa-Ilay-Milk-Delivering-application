@@ -364,9 +364,8 @@ function EditDeliveryModal({
     e.preventDefault();
     onError(null);
     setSubmitting(true);
-    fetch(getApiUrl(`/api/admin/delivery-team/${staff.id}`), {
+    fetchWithCsrf(`/api/admin/delivery-team/${staff.id}`, {
       method: 'PATCH',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: name.trim(),
