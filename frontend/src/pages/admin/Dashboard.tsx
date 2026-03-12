@@ -96,7 +96,8 @@ export const AdminDashboard: React.FC = () => {
       subtext: `${d.todayRevenueChange >= 0 ? '+' : ''}${d.todayRevenueChange}% from yesterday`,
       subtextColor: d.todayRevenueChange >= 0 ? 'text-green-800' : 'text-red-600',
       color: 'green',
-      clickable: false,
+      clickable: true,
+      onClick: () => navigate('/admin/payments'),
     },
     {
       icon: Clock,
@@ -104,7 +105,8 @@ export const AdminDashboard: React.FC = () => {
       value: String(d.pendingApprovals),
       subtext: 'New subscriptions',
       color: 'red',
-      clickable: false,
+      clickable: true,
+      onClick: () => navigate('/admin/customers'),
     },
   ];
 

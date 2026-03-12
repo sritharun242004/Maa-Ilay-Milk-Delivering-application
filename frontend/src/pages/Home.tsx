@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePricing } from '../hooks/usePricing';
+import { getApiUrl } from '../config/api';
 import {
   ArrowRight,
   Phone,
@@ -11,12 +12,65 @@ import {
   CheckCircle,
   Mail,
   MapPin,
+  Play,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
+const FALLBACK_REEL_IMAGE = '/Gemini Generated Image.png';
+
+const INSTAGRAM_REELS: { url: string; title: string; thumbnail?: string }[] = [
+  { url: 'https://www.instagram.com/reel/DItcaVmPyxV/?igsh=cjExYXZhYnAydGJi', title: 'From our farm' },
+  { url: 'https://www.instagram.com/reel/DI1ezLDv0jk/?igsh=YXA1bmlxNm5xdXRq', title: 'Fresh milk story' },
+  { url: 'https://www.instagram.com/reel/DJCHM7EPChu/?igsh=MWV4MXhmM3VuM3JjZQ==', title: 'Farm to doorstep' },
+  { url: 'https://www.instagram.com/reel/DJJ9hVBPNM9/?igsh=b3kwMmIwenN4d2hu', title: 'Maa Ilay reels' },
+  { url: 'https://www.instagram.com/reel/DJcFDklvTDm/?igsh=MWNraGUweHh4dnBzbg==', title: 'Behind the scenes' },
+  { url: 'https://www.instagram.com/reel/DJekjGBPImG/?igsh=c3d2ZGczaDB2azNp', title: 'Daily delivery' },
+];
 
 export const Home: React.FC = () => {
   const navigate = useNavigate();
   const { daily1LRs, daily500mlRs } = usePricing();
+  const reelCarouselRef = React.useRef<HTMLDivElement>(null);
+  const reelItemRefs = React.useRef<HTMLAnchorElement[]>([]);
+  const [reelThumbnails, setReelThumbnails] = React.useState<Record<string, string>>({});
+  const [activeReelIndex, setActiveReelIndex] = React.useState(0);
+
+  React.useEffect(() => {
+    INSTAGRAM_REELS.forEach((reel) => {
+      const apiUrl = getApiUrl(`/api/instagram-thumbnail?url=${encodeURIComponent(reel.url)}`);
+      fetch(apiUrl)
+        .then((r) => r.ok ? r.json() : null)
+        .then((data: { thumbnail_url?: string } | null) => {
+          if (data?.thumbnail_url) {
+            setReelThumbnails((prev) => ({ ...prev, [reel.url]: data.thumbnail_url! }));
+          }
+        })
+        .catch(() => {});
+    });
+  }, []);
+
+  const focusReelAtIndex = (index: number) => {
+    const clamped = (index + INSTAGRAM_REELS.length) % INSTAGRAM_REELS.length;
+    setActiveReelIndex(clamped);
+    const el = reelItemRefs.current[clamped];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  };
+
+  const scrollReelCarousel = (dir: 'left' | 'right') => {
+    const nextIndex = dir === 'left' ? activeReelIndex - 1 : activeReelIndex + 1;
+    focusReelAtIndex(nextIndex);
+  };
+
+  // Auto-rotate reels every 5 seconds
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      focusReelAtIndex(activeReelIndex + 1);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [activeReelIndex]);
 
   // Calculate 31-day monthly pricing for home page display
   const monthly1LRs = (daily1LRs * 31).toLocaleString('en-IN');
@@ -179,14 +233,14 @@ export const Home: React.FC = () => {
                 name: 'Fresh Cow Milk (1L)',
                 benefit: 'Perfect for families. Pure, fresh milk delivered every morning.',
                 price: `₹${monthly1LRs}/month`,
-                image: '/Gemini Generated Image (1).png',
+                image: '/Gemini Generated Image.png',
                 popular: true,
               },
               {
                 name: 'Fresh Cow Milk (500ml)',
                 benefit: 'Ideal for individuals. Fresh, pure milk in a convenient size for daily consumption.',
                 price: `₹${monthly500mlRs}/month`,
-                image: '/Gemini Generated Image (1).png',
+                image: '/Gemini Generated Image.png',
                 popular: false,
               },
             ].map((product, index) => (
@@ -220,6 +274,107 @@ export const Home: React.FC = () => {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* A2 Milk */}
+      <section id="a2-milk" className="py-20 bg-[#F8FAF5]">
+        <div className="max-w-[1400px] mx-auto px-8">
+          <div className="text-center mb-12">
+            <div className="w-10 h-1 bg-green-800 mx-auto mb-4 rounded-full"></div>
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">Why A2 Milk?</h2>
+            <p className="text-base text-gray-500 max-w-2xl mx-auto">
+              Our A2 cow milk comes from native Indian breeds that naturally produce only the A2 beta-casein protein — the same type found in traditional, easy-to-digest milk many grew up with.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto mb-14">
+            {[
+              { icon: Leaf, title: 'Easy to digest', desc: 'A2 protein is gentler on the stomach compared to conventional milk.' },
+              { icon: Heart, title: 'Closer to nature', desc: 'Sourced from desi cows raised on natural feed and care.' },
+              { icon: Milk, title: 'Rich & creamy', desc: 'Full-bodied taste and nutrition, the way milk was meant to be.' },
+            ].map((item, i) => (
+              <div key={i} className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm text-center">
+                <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <item.icon className="w-6 h-6 text-green-800" />
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-2">{item.title}</h3>
+                <p className="text-sm text-gray-600">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Instagram Reels Carousel */}
+          <div className="text-center mb-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-1">See us on Instagram</h3>
+            <p className="text-sm text-gray-500">Reels from our farm — tap to watch on Instagram</p>
+          </div>
+          <div className="relative max-w-5xl mx-auto">
+            <button
+              type="button"
+              onClick={() => scrollReelCarousel('left')}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/95 shadow-md border border-gray-200 flex items-center justify-center text-gray-700 hover:bg-gray-50 transition-colors -translate-x-2 md:translate-x-0"
+              aria-label="Previous reels"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div
+              ref={reelCarouselRef}
+              className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2 scrollbar-thin"
+              style={{ scrollbarWidth: 'thin' }}
+            >
+              {INSTAGRAM_REELS.map((reel, index) => (
+                <a
+                  key={index}
+                  ref={(el) => {
+                    if (el) reelItemRefs.current[index] = el;
+                  }}
+                  href={reel.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-shrink-0 w-[220px] snap-center group"
+                >
+                  <div className="relative aspect-square max-h-[240px] rounded-xl overflow-hidden border border-gray-200 bg-gray-100 shadow-md hover:shadow-lg transition-shadow">
+                    <img
+                      src={reel.thumbnail || reelThumbnails[reel.url] || FALLBACK_REEL_IMAGE}
+                      alt={reel.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const t = e.currentTarget;
+                        if (t.src !== FALLBACK_REEL_IMAGE) t.src = FALLBACK_REEL_IMAGE;
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                      <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Play className="w-7 h-7 text-green-800 ml-1" fill="currentColor" />
+                      </div>
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/70 to-transparent">
+                      <p className="text-white text-sm font-medium truncate">{reel.title}</p>
+                      <p className="text-white/80 text-xs">Watch on Instagram</p>
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => scrollReelCarousel('right')}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/95 shadow-md border border-gray-200 flex items-center justify-center text-gray-700 hover:bg-gray-50 transition-colors translate-x-2 md:translate-x-0"
+              aria-label="Next reels"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+          <p className="text-center mt-4">
+            <a
+              href="https://www.instagram.com/maailay_farmer"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-green-800 font-medium text-sm hover:underline"
+            >
+              @maailay_farmer on Instagram
+            </a>
+          </p>
         </div>
       </section>
 

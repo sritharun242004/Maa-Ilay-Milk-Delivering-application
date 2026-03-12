@@ -143,7 +143,15 @@ router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
     // KPI Calc: Today
     const deliveredToday = todayDl.filter(d => d.status === 'DELIVERED');
     const todayLiters = deliveredToday.reduce((s, d) => s + d.quantityMl / 1000, 0);
-    const todayRev = deliveredToday.reduce((s, d) => s + d.chargePaise, 0);
+    // Revenue KPI should reflect wallet recharges (wallet top-ups), not delivery charges
+    const walletTopupsToday = walletTransactions.filter(
+      (t) =>
+        t.type === 'WALLET_TOPUP' &&
+        new Date(t.createdAt) >= todayStart &&
+        new Date(t.createdAt) <= todayEnd &&
+        t.amountPaise > 0
+    );
+    const todayRev = walletTopupsToday.reduce((s, t) => s + t.amountPaise, 0);
 
     // Bottles in circulation: sum of latest ledger balances for all active customers
     const bottlesOut = activeCustomersWithBottles.reduce((s, c) => {
@@ -156,7 +164,14 @@ router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
     // KPI Calc: Yesterday
     const deliveredYesterday = yesterdayDl.filter(d => d.status === 'DELIVERED');
     const yestLiters = deliveredYesterday.reduce((s, d) => s + d.quantityMl / 1000, 0);
-    const yestRev = deliveredYesterday.reduce((s, d) => s + d.chargePaise, 0);
+    const walletTopupsYesterday = walletTransactions.filter(
+      (t) =>
+        t.type === 'WALLET_TOPUP' &&
+        new Date(t.createdAt) >= yesterdayStart &&
+        new Date(t.createdAt) <= yesterdayEnd &&
+        t.amountPaise > 0
+    );
+    const yestRev = walletTopupsYesterday.reduce((s, t) => s + t.amountPaise, 0);
 
     // Trends
     const calcChange = (cur: number, prev: number) => {
@@ -174,7 +189,11 @@ router.get('/dashboard', isAuthenticated, isAdmin, async (req, res) => {
       const dayRange = getDateRangeForDateColumn(dayIST);
 
       const dayTxns = walletTransactions.filter(
-        (t) => new Date(t.createdAt) >= dayRange.start && new Date(t.createdAt) <= dayRange.end && t.amountPaise > 0
+        (t) =>
+          t.type === 'WALLET_TOPUP' &&
+          new Date(t.createdAt) >= dayRange.start &&
+          new Date(t.createdAt) <= dayRange.end &&
+          t.amountPaise > 0
       );
       revenueTrend.push(Math.round(dayTxns.reduce((s, t) => s + t.amountPaise, 0) / 100));
     }

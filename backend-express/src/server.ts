@@ -258,6 +258,34 @@ app.get('/api/pricing', async (_req, res) => {
   }
 });
 
+// Instagram reel thumbnail (public, no auth) — tries oEmbed; returns thumbnail_url if available
+app.get('/api/instagram-thumbnail', async (req, res) => {
+  const rawUrl = typeof req.query.url === 'string' ? req.query.url.trim() : '';
+  if (!rawUrl || !rawUrl.startsWith('https://www.instagram.com/')) {
+    return res.status(400).json({ error: 'Valid Instagram URL required' });
+  }
+  try {
+    const canonicalUrl = rawUrl.split('?')[0];
+    const oembedUrl = `https://api.instagram.com/oembed?url=${encodeURIComponent(canonicalUrl)}`;
+    const response = await fetch(oembedUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MaaIlay/1.0)' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) {
+      return res.status(404).json({ error: 'Thumbnail not available' });
+    }
+    const data = (await response.json()) as { thumbnail_url?: string };
+    if (data.thumbnail_url) {
+      res.set('Cache-Control', 'public, max-age=86400'); // 24h
+      return res.json({ thumbnail_url: data.thumbnail_url });
+    }
+    return res.status(404).json({ error: 'Thumbnail not available' });
+  } catch (e) {
+    console.error('Instagram thumbnail fetch error:', e);
+    return res.status(502).json({ error: 'Could not fetch thumbnail' });
+  }
+});
+
 // Auth routes (stricter rate limiting for login/signup)
 app.use('/api/auth', authLimiter, authRoutes);
 
