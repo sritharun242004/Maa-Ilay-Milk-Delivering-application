@@ -2011,9 +2011,9 @@ router.get('/payments', isAuthenticated, isAdmin, async (req, res) => {
     const dateFrom = req.query.dateFrom as string | undefined;
     const dateTo = req.query.dateTo as string | undefined;
 
-    // Build where clause
+    // Build where clause — include all real customer payments (wallet top-ups and monthly subscription payments)
     const where: any = {
-      type: 'WALLET_TOPUP',
+      type: { in: ['WALLET_TOPUP', 'MONTHLY_PAYMENT'] },
     };
 
     // Date filter
@@ -2097,7 +2097,7 @@ router.get('/payments-export', isAuthenticated, isAdmin, async (req, res) => {
     const dateFrom = req.query.dateFrom as string | undefined;
     const dateTo = req.query.dateTo as string | undefined;
 
-    const where: any = { type: 'WALLET_TOPUP' };
+    const where: any = { type: { in: ['WALLET_TOPUP', 'MONTHLY_PAYMENT'] } };
 
     if (dateFrom || dateTo) {
       where.createdAt = {};
