@@ -915,8 +915,8 @@ router.post('/calendar/pause', isAuthenticated, isCustomer, async (req, res) => 
     const pauseDate = getStartOfDayIST(parseISTDateString(dateStr));
     const now = getNowIST();
     const todayStart = getStartOfDayIST(now);
-    if (pauseDate < todayStart) {
-      return res.status(400).json({ error: 'Cannot pause a past date' });
+    if (pauseDate <= todayStart) {
+      return res.status(400).json({ error: "Cannot modify today's or past deliveries. Changes must be made at least one day in advance." });
     }
     // To pause TOMORROW, request must be before TODAY 4 PM
     // Business rule: Can pause before 4:00 PM (16:00), blocked at or after 4:00 PM (>= 16:00)
@@ -967,6 +967,23 @@ router.delete('/calendar/pause', isAuthenticated, isCustomer, async (req, res) =
 
     // Parse date in IST timezone
     const pauseDate = getStartOfDayIST(parseISTDateString(dateStr));
+    const now = getNowIST();
+    const todayStart = getStartOfDayIST(now);
+
+    // Cannot undo today's or past pauses
+    if (pauseDate <= todayStart) {
+      return res.status(400).json({ error: "Cannot modify today's or past deliveries. Changes must be made at least one day in advance." });
+    }
+
+    // 4 PM cutoff: cannot undo tomorrow's pause at or after 4 PM
+    const tomorrowStart = getStartOfDayIST(addDaysIST(now, 1));
+    if (pauseDate.getTime() === tomorrowStart.getTime()) {
+      const currentHour = getCurrentHourIST();
+      if (currentHour >= PAUSE_CUTOFF_HOUR) {
+        return res.status(400).json({ error: "Cannot undo tomorrow's pause at or after 4 PM. You can make changes from day after tomorrow onwards." });
+      }
+    }
+
     const customerId = req.user.id;
     await prisma.pause.deleteMany({
       where: { customerId, pauseDate },
@@ -1132,8 +1149,8 @@ router.post('/calendar/bulk', isAuthenticated, isCustomer, async (req, res) => {
       const targetDateUTC = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
       const dayEndUTC = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
 
-      // Check past dates
-      if (targetDateUTC < todayUTC) continue;
+      // Check past dates and today — both are locked
+      if (targetDateUTC <= todayUTC) continue;
 
       // FIX: Check 4 PM cutoff for tomorrow using IST timezone
       const tomorrowUTC = new Date(todayUTC);

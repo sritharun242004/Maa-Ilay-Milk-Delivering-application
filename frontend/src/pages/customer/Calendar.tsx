@@ -144,13 +144,13 @@ export const CustomerCalendar: React.FC = () => {
       className += ' bg-white text-gray-700 border-gray-100 hover:border-green-200 hover:bg-green-50/50';
     }
 
-    if (!isPast) className += ' cursor-pointer';
+    if (!isPast && !isToday) className += ' cursor-pointer';
     return className;
   }, [getDayData, statusByDate]);
 
   const handleDayClick = (day: number) => {
-    const { dStr, isPast } = getDayData(day);
-    if (isPast) return;
+    const { dStr, isPast, isToday } = getDayData(day);
+    if (isPast || isToday) return;
 
     // Check if this is tomorrow and it's AFTER 4 PM (locked)
     // Business rule: Can pause until 4:00 PM, blocked after 4:00 PM
@@ -225,6 +225,12 @@ export const CustomerCalendar: React.FC = () => {
   }, []);
 
   const undoPause = async (dateToUnpause: string) => {
+    // Today is always locked — cannot undo
+    if (dateToUnpause === todayStr) {
+      setError("Cannot modify today's delivery. Changes must be made at least one day in advance.");
+      return;
+    }
+
     // Check if trying to undo tomorrow after 4 PM cutoff
     const now = new Date();
     const currentHour = now.getHours();
@@ -270,6 +276,12 @@ export const CustomerCalendar: React.FC = () => {
 
   const handleBulkAction = async (action: 'pause' | 'resume' | 'modify', quantityMl?: number) => {
     if (selectedDates.size === 0 || saving) return;
+
+    // Today is always locked
+    if (selectedDates.has(todayStr)) {
+      setError("Cannot modify today's delivery. Changes must be made at least one day in advance.");
+      return;
+    }
 
     // Check if any selected date is locked due to 4 PM cutoff
     // Business rule: Can modify until 4:00 PM, blocked at or after 4:00 PM
@@ -416,7 +428,7 @@ export const CustomerCalendar: React.FC = () => {
               </div>
               <div>
                 <p className="text-xs font-bold text-amber-600 uppercase tracking-wider">Cutoff Time</p>
-                <p className="text-lg font-black text-amber-900">5:00 PM Daily</p>
+                <p className="text-lg font-black text-amber-900">4:00 PM Daily</p>
               </div>
             </div>
           </Card>
@@ -528,7 +540,7 @@ export const CustomerCalendar: React.FC = () => {
                 const pausedAt = new Date(item.pausedAt);
                 const dateStr = date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
                 const timeStr = pausedAt.toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                const canUndo = new Date(item.date) >= new Date(todayStr);
+                const canUndo = new Date(item.date) > new Date(todayStr);
 
                 return (
                   <div key={item.date} className="flex items-center justify-between p-3 bg-white rounded-lg border border-orange-200">

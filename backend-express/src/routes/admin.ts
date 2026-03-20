@@ -1046,11 +1046,11 @@ router.get('/delivery-team', isAuthenticated, isAdmin, async (req, res) => {
       orderBy: { name: 'asc' },
       include: {
         _count: { select: { Customer: true } },
-        // FIX: Only count DELIVERED deliveries for todayDeliveries
+        // Count both DELIVERED and NOT_DELIVERED as completed (delivery person acted on it)
         Delivery: {
           where: {
             deliveryDate: { gte: todayRange.start, lte: todayRange.end },
-            status: 'DELIVERED'
+            status: { in: ['DELIVERED', 'NOT_DELIVERED'] }
           },
           select: { id: true },
         },

@@ -449,7 +449,7 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
       return 0;
     });
 
-    const completed = sortedDeliveries.filter((d: any) => d.status === 'DELIVERED').length;
+    const completed = sortedDeliveries.filter((d: any) => d.status === 'DELIVERED' || d.status === 'NOT_DELIVERED').length;
     const totalLiters = sortedDeliveries.reduce((s: any, d: any) => s + d.quantityMl / 1000, 0);
     const total1LBottles = sortedDeliveries.reduce((s: any, d: any) => s + d.largeBottles, 0);
     const total500mlBottles = sortedDeliveries.reduce((s: any, d: any) => s + d.smallBottles, 0);
