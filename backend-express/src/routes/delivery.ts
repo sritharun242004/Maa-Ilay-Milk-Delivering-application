@@ -424,9 +424,12 @@ router.get('/today', isAuthenticated, isDelivery, async (req, res) => {
         if (subStart > start) return false;
       }
 
-      // If already processed (Delivered/Not Delivered), show it regardless of customer status
+      // If already completed, show it regardless of customer status
       // (customer may have gone INACTIVE after being charged)
-      if (d.status !== 'SCHEDULED') return true;
+      if (d.status === 'DELIVERED' || d.status === 'NOT_DELIVERED') return true;
+
+      // Do NOT show paused, blocked, or holiday rows to the delivery person
+      if (d.status !== 'SCHEDULED') return false;
 
       // For SCHEDULED deliveries: customer must be ACTIVE
       if (c.status !== 'ACTIVE') return false;
@@ -683,8 +686,11 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
     // Only issue bottles when actually delivered
     const shouldIssueBottles = body.status === 'DELIVERED' && delivery.status !== 'DELIVERED';
 
-    // Fetch inventory BEFORE transaction
-    const inventory = await prisma.inventory.findFirst();
+    // Fetch inventory BEFORE transaction (used inside tx for inventory tracking)
+    const inventory = await prisma.inventory.findFirst({ orderBy: { updatedAt: 'desc' } });
+    if (!inventory) {
+      console.warn('[delivery/mark] No Inventory record found — inCirculation will not be updated. Ask admin to initialise inventory via the Inventory page.');
+    }
 
     // Recalculate charge from current DB pricing (admin may have updated prices)
     const currentChargePaise = shouldChargeWallet
