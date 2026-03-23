@@ -18,7 +18,7 @@ import {
   getDateRangeForDateColumn,
   getTodayRangeForDateColumn
 } from '../utils/dateUtils';
-import { deliveryActionLimiter } from '../middleware/rateLimiter';
+import { deliveryActionLimiter, passwordResetLimiter } from '../middleware/rateLimiter';
 import { sanitizeDeliveryData } from '../utils/sanitize';
 import { ErrorCode, createErrorResponse, getErrorMessage } from '../utils/errorCodes';
 import { updateCustomerStatus } from '../utils/statusManager';
@@ -72,7 +72,9 @@ export async function ensureTodayDeliveries(deliveryPersonId: string, start: Dat
     prisma.customer.findMany({
       where: {
         deliveryPersonId,
-        status: 'ACTIVE',
+        // Include INACTIVE customers too — wallet check below is the real gate.
+        // This handles stale status (e.g. customer paid but scheduler hasn't run yet).
+        status: { in: ['ACTIVE', 'INACTIVE'] },
         Subscription: { status: 'ACTIVE' },
         Pause: { none: { pauseDate: { gte: start, lte: end } } },
       },
@@ -192,14 +194,14 @@ router.get('/me', isAuthenticated, isDelivery, async (req, res) => {
 });
 
 // Change password (delivery person sets own password after one-time from admin)
-router.put('/me/password', isAuthenticated, isDelivery, async (req, res) => {
+router.put('/me/password', passwordResetLimiter, isAuthenticated, isDelivery, async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     const currentPassword = typeof req.body?.currentPassword === 'string' ? req.body.currentPassword : '';
     const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
 
     if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Current and new password required' });
-    if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    if (newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
 
     const delivery = await prisma.deliveryPerson.findUnique({ where: { id: req.user.id } });
     if (!delivery) return res.status(404).json({ error: 'Not found' });
@@ -648,12 +650,13 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
     // Sanitize and validate input
     const body = sanitizeDeliveryData(req.body);
 
+    // Reject marking deliveries older than 7 days to prevent retroactive fraud
+    const sevenDaysAgo = getStartOfDayIST(addDaysIST(getNowIST(), -7));
     const delivery = await prisma.delivery.findFirst({
       where: {
         id: deliveryId,
         deliveryPersonId: req.user.id,
-        // Allow marking for today or past dates (in case they missed it)
-        // deliveryDate: todayStart(), 
+        deliveryDate: { gte: sevenDaysAgo },
       },
       include: {
         Customer: {
@@ -1072,6 +1075,8 @@ router.patch('/:id/mark', deliveryActionLimiter, isAuthenticated, isDelivery, as
 });
 
 // Bottle ledger summary: pending bottles per customer (for delivery person's customers)
+const BOTTLE_OVERDUE_DAYS = 3;
+
 router.get('/bottle-ledger', isAuthenticated, isDelivery, async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
@@ -1080,31 +1085,82 @@ router.get('/bottle-ledger', isAuthenticated, isDelivery, async (req, res) => {
       select: { id: true, name: true, phone: true },
     });
 
-    // Batch fetch bottle ledgers for ALL customers in single query (fixes N+1 problem)
     const customerIds = customers.map(c => c.id);
-    const bottleLedgers = customerIds.length > 0
-      ? await prisma.$queryRaw<Array<{customerId: string, largeBottleBalanceAfter: number, smallBottleBalanceAfter: number}>>`
-          SELECT DISTINCT ON ("customerId")
-            "customerId",
-            "largeBottleBalanceAfter",
-            "smallBottleBalanceAfter"
-          FROM "BottleLedger"
-          WHERE "customerId" = ANY(${customerIds}::text[])
-          ORDER BY "customerId", "createdAt" DESC
-        `
-      : [];
+
+    if (customerIds.length === 0) {
+      return res.json({ summaries: [] });
+    }
+
+    // Two parallel queries:
+    // 1. Latest balance per customer (DISTINCT ON latest entry)
+    // 2. Oldest unreturned ISSUED bottle per customer (for overdue detection)
+    const [bottleLedgers, oldestUnreturned] = await Promise.all([
+      prisma.$queryRaw<Array<{
+        customerId: string;
+        largeBottleBalanceAfter: number;
+        smallBottleBalanceAfter: number;
+      }>>`
+        SELECT DISTINCT ON ("customerId")
+          "customerId",
+          "largeBottleBalanceAfter",
+          "smallBottleBalanceAfter"
+        FROM "BottleLedger"
+        WHERE "customerId" = ANY(${customerIds}::text[])
+        ORDER BY "customerId", "createdAt" DESC
+      `,
+      prisma.$queryRaw<Array<{
+        customerId: string;
+        issuedDate: Date | null;
+        createdAt: Date;
+      }>>`
+        SELECT DISTINCT ON ("customerId")
+          "customerId",
+          "issuedDate",
+          "createdAt"
+        FROM "BottleLedger"
+        WHERE "customerId" = ANY(${customerIds}::text[])
+          AND action = 'ISSUED'
+          AND "returnedAt" IS NULL
+          AND "penaltyAppliedAt" IS NULL
+        ORDER BY "customerId", COALESCE("issuedDate", "createdAt") ASC
+      `,
+    ]);
 
     const ledgerMap = new Map(bottleLedgers.map(l => [l.customerId, l]));
+    const overdueMap = new Map(oldestUnreturned.map(e => [e.customerId, e]));
+
+    const now = new Date();
 
     const summaries = customers.map(c => {
       const ledger = ledgerMap.get(c.id);
+      const oldest = overdueMap.get(c.id);
+
+      let daysOverdue = 0;
+      let overdueSince: string | null = null;
+
+      if (oldest) {
+        const bottleDate = oldest.issuedDate ? new Date(oldest.issuedDate) : new Date(oldest.createdAt);
+        daysOverdue = Math.floor((now.getTime() - bottleDate.getTime()) / (1000 * 60 * 60 * 24));
+        overdueSince = bottleDate.toISOString();
+      }
+
       return {
         customerId: c.id,
         name: c.name,
         phone: c.phone,
         largePending: ledger?.largeBottleBalanceAfter ?? 0,
         smallPending: ledger?.smallBottleBalanceAfter ?? 0,
+        daysOverdue,
+        isOverdue: daysOverdue >= BOTTLE_OVERDUE_DAYS,
+        overdueSince,
       };
+    });
+
+    // Overdue customers first, then sorted by most days overdue
+    summaries.sort((a, b) => {
+      if (a.isOverdue && !b.isOverdue) return -1;
+      if (!a.isOverdue && b.isOverdue) return 1;
+      return b.daysOverdue - a.daysOverdue;
     });
 
     res.json({ summaries });

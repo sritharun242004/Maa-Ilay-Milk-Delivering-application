@@ -27,7 +27,7 @@ const csrfConfig = doubleCsrf({
   cookieOptions: {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.SECURE_COOKIES === 'true',
+    secure: process.env.SECURE_COOKIES === 'true' || process.env.NODE_ENV === 'production',
     path: '/',
   },
   size: 64, // Token size

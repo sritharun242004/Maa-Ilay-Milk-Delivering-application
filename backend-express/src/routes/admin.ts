@@ -1603,8 +1603,12 @@ router.post('/customers/:id/adjust-wallet', isAuthenticated, isAdmin, async (req
     const amountRs = parseFloat(req.body?.amountRs);
     const description = typeof req.body?.description === 'string' ? req.body.description.trim() : '';
 
+    const MAX_ADJUSTMENT_RS = 50000; // ₹50,000 per operation
     if (isNaN(amountRs) || amountRs === 0) {
       return res.status(400).json({ error: 'Amount must be a non-zero number' });
+    }
+    if (Math.abs(amountRs) > MAX_ADJUSTMENT_RS) {
+      return res.status(400).json({ error: `Adjustment cannot exceed ₹${MAX_ADJUSTMENT_RS.toLocaleString('en-IN')} per operation` });
     }
     if (!description) {
       return res.status(400).json({ error: 'Description is required' });

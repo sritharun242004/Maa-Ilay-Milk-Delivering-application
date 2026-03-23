@@ -50,6 +50,9 @@ export function startMonthlyPaymentScheduler() {
       // Create records daily (not just 1st) to catch mid-month approvals and edge cases
       await createMonthlyPaymentRecords(year, month);
 
+      // Re-activate INACTIVE customers who now qualify (runs every day)
+      await reactivateEligibleCustomers(now, currentDay);
+
       if (currentDay > GRACE_PERIOD_END_DAY) {
         await enforceOverduePayments(year, month);
       }
@@ -125,6 +128,59 @@ async function createMonthlyPaymentRecords(year: number, month: number): Promise
   }
 
   console.log(`[Scheduler] Created ${created} monthly payment records (${autoPaid} auto-paid by wallet balance)`);
+}
+
+/**
+ * Re-activate INACTIVE customers who now qualify for delivery
+ * Runs every day before the overdue sweep.
+ * - During grace period (days 1-7): re-activates all INACTIVE customers (no wallet check)
+ * - After grace period (8th+): re-activates only those with wallet >= 1 day's rate
+ * - Skips customers paused for today
+ */
+async function reactivateEligibleCustomers(now: Date, currentDay: number): Promise<void> {
+  const isGracePeriod = currentDay <= GRACE_PERIOD_END_DAY;
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+  const inactiveCustomers = await prisma.customer.findMany({
+    where: {
+      status: 'INACTIVE',
+      deliveryPersonId: { not: null },
+      Subscription: { status: 'ACTIVE' },
+      Pause: { none: { pauseDate: { gte: todayStart, lte: todayEnd } } },
+    },
+    include: { Subscription: true, Wallet: true },
+  });
+
+  if (inactiveCustomers.length === 0) {
+    console.log('[Scheduler] Re-activation: no INACTIVE customers found');
+    return;
+  }
+
+  const reactivateIds: string[] = [];
+  for (const customer of inactiveCustomers) {
+    if (!customer.Subscription) continue;
+    if (isGracePeriod) {
+      // Grace period: re-activate regardless of wallet (allow negative balance)
+      reactivateIds.push(customer.id);
+    } else {
+      const walletBalance = customer.Wallet?.balancePaise ?? 0;
+      const dailyRate = await calculateDailyPricePaise(customer.Subscription.dailyQuantityMl);
+      if (walletBalance >= dailyRate) {
+        reactivateIds.push(customer.id);
+      }
+    }
+  }
+
+  if (reactivateIds.length > 0) {
+    await prisma.customer.updateMany({
+      where: { id: { in: reactivateIds } },
+      data: { status: 'ACTIVE' },
+    });
+    console.log(`[Scheduler] Re-activated ${reactivateIds.length} INACTIVE customers (${isGracePeriod ? 'grace period' : 'sufficient wallet'})`);
+  } else {
+    console.log('[Scheduler] Re-activation: no INACTIVE customers eligible for re-activation');
+  }
 }
 
 /**

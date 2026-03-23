@@ -138,7 +138,7 @@ export async function verifyAndProcessPayment(params: VerifyPaymentParams): Prom
     console.log('Verifying payment for order:', orderId);
 
     // CRITICAL: Use transaction with SELECT FOR UPDATE to prevent race conditions
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       // Lock the payment order row to prevent concurrent processing
       const paymentOrder = await tx.paymentOrder.findUnique({
         where: { gatewayOrderId: orderId },
@@ -256,6 +256,21 @@ export async function verifyAndProcessPayment(params: VerifyPaymentParams): Prom
       timeout: 15000,
       isolationLevel: 'Serializable',
     });
+
+    // Post-transaction: re-calculate and persist customer status immediately after payment.
+    // This re-activates INACTIVE customers who just topped up their wallet, without waiting
+    // for the nightly scheduler. Non-critical: errors are logged but don't fail the payment.
+    if (result.success && result.customerId) {
+      try {
+        const { updateCustomerStatus } = await import('../utils/statusManager');
+        const newStatus = await updateCustomerStatus(result.customerId);
+        console.log(`✅ Customer status updated to ${newStatus} after payment for ${result.customerId}`);
+      } catch (statusErr) {
+        console.error('Non-critical: failed to update customer status after payment:', statusErr);
+      }
+    }
+
+    return result;
   } catch (error: any) {
     console.error('Cashfree verify payment error:', error.response?.data || error.message);
     return {

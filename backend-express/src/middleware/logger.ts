@@ -206,7 +206,11 @@ export function errorLogger(err: any, req: Request, res: Response, next: NextFun
  */
 export function requestContextLogger(req: Request, res: Response, next: NextFunction): void {
   // Check if request ID already exists (from load balancer or proxy)
-  let requestId = req.get('X-Request-ID') || req.get('X-Correlation-ID');
+  // Sanitize to prevent log injection: keep only alphanumeric, hyphens, underscores
+  const rawRequestId = req.get('X-Request-ID') || req.get('X-Correlation-ID');
+  let requestId = rawRequestId
+    ? rawRequestId.replace(/[^a-zA-Z0-9\-_]/g, '').slice(0, 64)
+    : undefined;
 
   // Generate lightweight random ID if no request ID provided
   if (!requestId) {

@@ -64,11 +64,9 @@ export async function createAuditLog(params: AuditLogParams): Promise<void> {
     const { adminId, action, entityType, entityId, oldValue, newValue, req } = params;
 
     // Extract IP and User-Agent from request if available
-    const ipAddress = req ? (
-      (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
-      req.headers['x-real-ip'] as string ||
-      req.socket.remoteAddress
-    ) : undefined;
+    // Use req.ip which Express resolves correctly when trust proxy is configured,
+    // preventing IP spoofing via x-forwarded-for header manipulation.
+    const ipAddress = req ? (req.ip || req.socket.remoteAddress) : undefined;
 
     const userAgent = req ? req.headers['user-agent'] : undefined;
 

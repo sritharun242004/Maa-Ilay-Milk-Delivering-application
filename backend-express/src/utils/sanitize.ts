@@ -23,9 +23,6 @@ export function sanitizeString(input: string | null | undefined): string {
   // Remove any HTML tags and scripts
   cleaned = DOMPurify.sanitize(cleaned, { ALLOWED_TAGS: [] });
 
-  // Escape special characters
-  cleaned = validator.escape(cleaned);
-
   return cleaned;
 }
 

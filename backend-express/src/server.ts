@@ -210,7 +210,7 @@ app.use(
     saveUninitialized: false,
     store: new CachedSessionStore(prismaStore),
     cookie: {
-      secure: process.env.SECURE_COOKIES === 'true', // Enable only when HTTPS is configured
+      secure: process.env.SECURE_COOKIES === 'true' || process.env.NODE_ENV === 'production', // Auto-enable for production
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
       sameSite: 'lax', // Same-origin serving, no need for 'none'
@@ -299,7 +299,7 @@ app.use('/api/customer', (req, res, next) => {
     if (req.user && req.user.role === 'customer') {
       console.warn(`CSRF bypass for OAuth profile completion - User: ${req.user.id}`);
       // Log this security bypass for monitoring
-      logSecurityEvent('CSRF_FAILURE', req, {
+      logSecurityEvent('SUSPICIOUS_ACTIVITY', req, {
         userId: req.user.id,
         bypass: 'oauth_profile_completion'
       });

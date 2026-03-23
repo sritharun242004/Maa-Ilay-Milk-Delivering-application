@@ -280,8 +280,13 @@ router.get('/startup', async (req: Request, res: Response) => {
 /**
  * Detailed health check (includes all checks)
  * GET /health/detailed
+ * Requires X-Health-Token header matching HEALTH_CHECK_TOKEN env var
  */
 router.get('/detailed', async (req: Request, res: Response) => {
+  const token = process.env.HEALTH_CHECK_TOKEN;
+  if (token && req.get('X-Health-Token') !== token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   const checks = {
     database: await checkDatabase(),
     memory: checkMemory(),

@@ -74,7 +74,7 @@ export const VALIDATION = {
     MAX_LENGTH: 1000,
   },
   PASSWORD: {
-    MIN_LENGTH: 6,
+    MIN_LENGTH: 8,
   },
   EMAIL: {
     MAX_LENGTH: 255,

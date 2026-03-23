@@ -808,6 +808,26 @@ router.post('/calendar/modify', isAuthenticated, isCustomer, async (req, res) =>
 
     // Parse date in IST timezone
     const modDate = getStartOfDayIST(parseISTDateString(date));
+    const now = getNowIST();
+    const todayStart = getStartOfDayIST(now);
+
+    // Block past dates and today — only future dates allowed
+    if (modDate <= todayStart) {
+      return res.status(400).json({ error: "Cannot modify today's or past deliveries. Changes must be made at least one day in advance." });
+    }
+
+    // 4 PM cutoff: if modifying tomorrow, request must be before 4 PM today
+    const tomorrowStart = getStartOfDayIST(addDaysIST(now, 1));
+    if (modDate.getTime() === tomorrowStart.getTime()) {
+      const currentHour = getCurrentHourIST();
+      if (currentHour >= PAUSE_CUTOFF_HOUR) {
+        return res.status(400).json(createErrorResponse(
+          ErrorCode.CUTOFF_TIME_EXCEEDED,
+          'To modify tomorrow, you must change before 4:00 PM today. You can only modify from the day after tomorrow onward.',
+          { cutoff: '16:00' }
+        ));
+      }
+    }
 
     // Upsert modification
     await prisma.deliveryModification.upsert({
@@ -865,6 +885,22 @@ router.delete('/calendar/modify', isAuthenticated, isCustomer, async (req, res) 
     }
     // Parse date in IST timezone
     const modDate = getStartOfDayIST(parseISTDateString(dateStr));
+    const now = getNowIST();
+    const todayStart = getStartOfDayIST(now);
+
+    // Block past dates and today
+    if (modDate <= todayStart) {
+      return res.status(400).json({ error: "Cannot modify today's or past deliveries. Changes must be made at least one day in advance." });
+    }
+
+    // 4 PM cutoff for tomorrow
+    const tomorrowStart = getStartOfDayIST(addDaysIST(now, 1));
+    if (modDate.getTime() === tomorrowStart.getTime()) {
+      const currentHour = getCurrentHourIST();
+      if (currentHour >= PAUSE_CUTOFF_HOUR) {
+        return res.status(400).json({ error: "Cannot modify tomorrow's delivery at or after 4 PM. You can make changes from day after tomorrow onwards." });
+      }
+    }
 
     await prisma.deliveryModification.deleteMany({
       where: {
