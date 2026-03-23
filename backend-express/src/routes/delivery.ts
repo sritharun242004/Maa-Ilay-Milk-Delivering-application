@@ -72,9 +72,10 @@ export async function ensureTodayDeliveries(deliveryPersonId: string, start: Dat
     prisma.customer.findMany({
       where: {
         deliveryPersonId,
-        // Include INACTIVE customers too — wallet check below is the real gate.
+        // Include INACTIVE/PAUSED customers too — wallet check below is the real gate.
+        // PAUSED filter is handled by the Pause: { none: ... } clause below.
         // This handles stale status (e.g. customer paid but scheduler hasn't run yet).
-        status: { in: ['ACTIVE', 'INACTIVE'] },
+        status: { in: ['ACTIVE', 'INACTIVE', 'PAUSED'] },
         Subscription: { status: 'ACTIVE' },
         Pause: { none: { pauseDate: { gte: start, lte: end } } },
       },

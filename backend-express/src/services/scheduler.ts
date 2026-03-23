@@ -142,9 +142,9 @@ async function reactivateEligibleCustomers(now: Date, currentDay: number): Promi
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
   const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-  const inactiveCustomers = await prisma.customer.findMany({
+  const eligibleCustomers = await prisma.customer.findMany({
     where: {
-      status: 'INACTIVE',
+      status: { in: ['INACTIVE', 'PAUSED'] },
       deliveryPersonId: { not: null },
       Subscription: { status: 'ACTIVE' },
       Pause: { none: { pauseDate: { gte: todayStart, lte: todayEnd } } },
@@ -152,16 +152,21 @@ async function reactivateEligibleCustomers(now: Date, currentDay: number): Promi
     include: { Subscription: true, Wallet: true },
   });
 
-  if (inactiveCustomers.length === 0) {
-    console.log('[Scheduler] Re-activation: no INACTIVE customers found');
+  if (eligibleCustomers.length === 0) {
+    console.log('[Scheduler] Re-activation: no INACTIVE/PAUSED customers found');
     return;
   }
 
   const reactivateIds: string[] = [];
-  for (const customer of inactiveCustomers) {
+  for (const customer of eligibleCustomers) {
     if (!customer.Subscription) continue;
-    if (isGracePeriod) {
-      // Grace period: re-activate regardless of wallet (allow negative balance)
+
+    if (customer.status === 'PAUSED') {
+      // PAUSED customer with no pause for today → re-activate unconditionally
+      // (they resumed from pause; wallet is not checked here since pause was voluntary)
+      reactivateIds.push(customer.id);
+    } else if (isGracePeriod) {
+      // Grace period: re-activate INACTIVE regardless of wallet (allow negative balance)
       reactivateIds.push(customer.id);
     } else {
       const walletBalance = customer.Wallet?.balancePaise ?? 0;
@@ -177,9 +182,9 @@ async function reactivateEligibleCustomers(now: Date, currentDay: number): Promi
       where: { id: { in: reactivateIds } },
       data: { status: 'ACTIVE' },
     });
-    console.log(`[Scheduler] Re-activated ${reactivateIds.length} INACTIVE customers (${isGracePeriod ? 'grace period' : 'sufficient wallet'})`);
+    console.log(`[Scheduler] Re-activated ${reactivateIds.length} INACTIVE/PAUSED customers (${isGracePeriod ? 'grace period' : 'wallet/pause-ended'})`);
   } else {
-    console.log('[Scheduler] Re-activation: no INACTIVE customers eligible for re-activation');
+    console.log('[Scheduler] Re-activation: no INACTIVE/PAUSED customers eligible for re-activation');
   }
 }
 
